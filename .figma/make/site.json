@@ -1,0 +1,10 @@
+{
+  "description": "Manage loyalty cards and company info with a user-friendly dashboard designed for business owners and client companies using warm, inviting tones.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

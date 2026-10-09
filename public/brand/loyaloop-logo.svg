@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1950" height="420" viewBox="0 0 1950 420" role="img" aria-labelledby="titulo descripcion">
+<title id="titulo">LoyaLoop</title><desc id="descripcion">Logo vectorial editable. Símbolo naranja FF6A00 y nombre terracota 8A2E12. Fondo transparente.</desc>
+<g id="Simbolo" fill="none" stroke="#FF6A00" stroke-width="58" stroke-linecap="butt" stroke-linejoin="round">
+<path id="Arco_izquierdo" d="M 258 149 L 207 108 C 112 30 42 112 42 194 C 42 278 127 331 201 265 L 360 117 C 440 43 527 110 527 194 C 527 281 442 325 373 268 L 323 226"/>
+</g>
+<g id="LoyaLoop" fill="#8A2E12"><path id="Letra_1_L" fill-rule="evenodd" d="M 635 65 H 685 V 235 H 770 V 280 H 635 Z"/>
+<path id="Letra_2_o" fill-rule="evenodd" d="M 771 203 a 79 79 0 1 0 158 0 a 79 79 0 1 0 -158 0 Z M 812 203 a 38 38 0 1 0 76 0 a 38 38 0 1 0 -76 0 Z"/>
+<path id="Letra_3_y" fill-rule="evenodd" d="M 915 128 H 967 L 1008 213 L 1047 128 H 1098 L 995 350 H 943 L 980 270 Z"/>
+<path id="Letra_4_a" fill-rule="evenodd" d="M 1096 203 a 79 79 0 1 0 158 0 a 79 79 0 1 0 -158 0 Z M 1137 203 a 38 38 0 1 0 76 0 a 38 38 0 1 0 -76 0 Z"/><path id="Asta_a" d="M 1210 125 H 1255 V 280 H 1210 Z"/>
+<path id="Letra_5_L" fill-rule="evenodd" d="M 1275 65 H 1325 V 235 H 1410 V 280 H 1275 Z"/>
+<path id="Letra_6_o" fill-rule="evenodd" d="M 1411 203 a 79 79 0 1 0 158 0 a 79 79 0 1 0 -158 0 Z M 1452 203 a 38 38 0 1 0 76 0 a 38 38 0 1 0 -76 0 Z"/>
+<path id="Letra_7_o" fill-rule="evenodd" d="M 1581 203 a 79 79 0 1 0 158 0 a 79 79 0 1 0 -158 0 Z M 1622 203 a 38 38 0 1 0 76 0 a 38 38 0 1 0 -76 0 Z"/>
+<path id="Letra_8_p" fill-rule="evenodd" d="M 1761 203 a 79 79 0 1 0 158 0 a 79 79 0 1 0 -158 0 Z M 1802 203 a 38 38 0 1 0 76 0 a 38 38 0 1 0 -76 0 Z"/><path id="Asta_p" d="M 1761 125 H 1805 V 350 H 1761 Z"/></g>
+</svg>
