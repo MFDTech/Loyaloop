@@ -1,10 +1,15 @@
 {
-  "description": "Manage loyalty cards and company info with a user-friendly dashboard designed for business owners and client companies using warm, inviting tones.",
+  "description": "Tarjetas de lealtad en Apple Wallet y Google Wallet para tu negocio. Los puntos se suman solos al pagar.",
   "robots": {
     "index": false
   },
   "accessibility": {
     "addBypassLinks": false,
     "ignoreReducedMotion": false
+  },
+  "title": "LoyaLoop",
+  "language": "es",
+  "icons": {
+    "icon": "brand/loyaloop-symbol.svg"
   }
 }
