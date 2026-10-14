@@ -215,7 +215,7 @@ export default function Registration({ code }: { code: string }) {
                   {existing && mode === "new" && " Ya tienes una tarjeta con este celular: al confirmar te la mostramos."}
                 </p>
               </div>
-              {PREVIEW && preview && (
+              {preview && (
                 <Notice tone="info" title="Versión de prueba">
                   Aún no se envían SMS. Tu código es <b className="ll-mono">{preview}</b>.
                 </Notice>

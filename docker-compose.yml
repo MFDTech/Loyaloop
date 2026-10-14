@@ -1,0 +1,73 @@
+# Production on the Hostinger VPS: docker compose up -d --build
+# Settings come from .env (copy .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: loyaloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: loyaloop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loyaloop -d loyaloop"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_PREVIEW: ${VITE_PREVIEW:-false}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://loyaloop:${POSTGRES_PASSWORD}@db:5432/loyaloop
+      PORT: "3000"
+      TRUST_PROXY: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # HTTPS with automatic Let's Encrypt certificates.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Falta DOMAIN en .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  # Daily database backup in ./backups, the last 14 kept.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          pg_dump -h db -U loyaloop -d loyaloop -Fc -f /backups/loyaloop-$$(date +%Y%m%d-%H%M).dump && echo "respaldo listo"
+          ls -1t /backups/*.dump | tail -n +15 | xargs -r rm --
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
