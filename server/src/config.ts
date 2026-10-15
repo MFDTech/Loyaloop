@@ -14,6 +14,9 @@ export interface Config {
   trustProxy: boolean
   secureCookies: boolean
   mercadoPagoWebhookSecret: string
+  /** Google Wallet issuer id (Google Pay & Wallet Console) and service account key file. */
+  googleWalletIssuerId: string
+  googleWalletKeyFile: string
 }
 
 const flag = (value: string | undefined, fallback = false) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(value.toLowerCase()))
@@ -32,5 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: flag(env.TRUST_PROXY, true),
     secureCookies: flag(env.SECURE_COOKIES, publicUrl.startsWith("https://")),
     mercadoPagoWebhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET || "",
+    googleWalletIssuerId: env.GOOGLE_WALLET_ISSUER_ID || "",
+    googleWalletKeyFile: env.GOOGLE_WALLET_KEY_FILE || "",
   }
 }

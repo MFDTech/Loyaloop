@@ -182,4 +182,36 @@ create table webhook_events (
 create index webhook_events_status on webhook_events (status, received_at);
 `,
   },
+  {
+    id: "003_wallet",
+    sql: `
+-- Which customers have a pass in which wallet.
+create table wallet_passes (
+  customer_id text primary key,
+  business_id text not null,
+  google_object_id text,
+  apple_serial text,
+  created_at timestamptz not null default now()
+);
+create index wallet_passes_business on wallet_passes (business_id);
+
+-- Pass updates and notifications to send, with retries.
+create table wallet_jobs (
+  id bigserial primary key,
+  kind text not null,
+  business_id text not null,
+  ref text not null,
+  payload jsonb not null default '{}',
+  status text not null default 'pending',
+  attempts int not null default 0,
+  run_after timestamptz not null default now(),
+  last_error text,
+  created_at timestamptz not null default now(),
+  done_at timestamptz
+);
+-- One pending update per pass or class: several changes in a row become one call.
+create unique index wallet_jobs_pending on wallet_jobs (kind, ref) where status = 'pending';
+create index wallet_jobs_due on wallet_jobs (status, run_after);
+`,
+  },
 ]

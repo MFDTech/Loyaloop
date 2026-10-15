@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { CardHolder, PublicCard } from "../lib/api"
-import { cardTypeLabel, inkFor, int, money } from "../lib/util"
+import { backFields } from "../lib/passText"
+import { cardTypeLabel, inkFor, int } from "../lib/util"
 import Qr from "./Qr"
 import { Icon, Segmented } from "./ui"
 
@@ -33,36 +34,6 @@ function Stamps({ count, goal, ink }: { count: number; goal: number; ink: string
       ))}
     </div>
   )
-}
-
-function rules(card: PublicCard): string {
-  const p = card.program
-  switch (card.type) {
-    case "stamps":
-      return `Cada compra${p.stampMinPurchase ? ` desde ${money(p.stampMinPurchase)}` : ""} suma un sello. Con ${p.stampGoal} sellos obtienes tu recompensa y la tarjeta vuelve a empezar.`
-    case "tiers":
-      return `Ganas ${int(p.pointsPerPeso * 100)} puntos por cada $100 pagados, sin propina${p.minPurchase ? `, en compras desde ${money(p.minPurchase)}` : ""}. Tu nivel depende de lo que gastas en 12 meses: ${p.tiers.map((t) => `${t.name} desde ${money(t.threshold)} (×${t.multiplier})`).join(", ")}.`
-    default:
-      return `Ganas ${int(p.pointsPerPeso * 100)} puntos por cada $100 pagados, sin propina${p.minPurchase ? `, en compras desde ${money(p.minPurchase)}` : ""}.`
-  }
-}
-
-function backFields(card: PublicCard) {
-  const fields = [
-    { label: "Cómo funciona", value: rules(card) },
-    card.rewards.length
-      ? {
-          label: "Recompensas",
-          value: card.rewards.map((r) => (card.type === "stamps" ? r.name : `${r.name}: ${int(r.cost)} puntos`)).join(" · "),
-        }
-      : null,
-    card.type !== "stamps" && card.program.expirationMonths
-      ? { label: "Vigencia", value: `Los puntos vencen tras ${card.program.expirationMonths} meses sin actividad.` }
-      : null,
-    { label: "Contacto", value: [card.contact.email, card.contact.phone].filter(Boolean).join(" · ") || "En sucursal" },
-    { label: "Condiciones", value: "Muestra el código en caja antes o después de pagar. Los beneficios están sujetos a las condiciones del negocio." },
-  ]
-  return fields.filter(Boolean) as { label: string; value: string }[]
 }
 
 export function ApplePass({ card, holder, back = false }: PassData & { back?: boolean }) {

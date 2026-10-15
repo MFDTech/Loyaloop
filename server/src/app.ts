@@ -11,6 +11,8 @@ import { hashPassword, verifyPassword } from "./passwords"
 import { LIMITS, RateLimiter } from "./rateLimit"
 import { SESSION_COOKIE, SESSION_DAYS, createSession, deleteSession, deleteUserSessions, findSession, updateSession } from "./sessions"
 import { mercadoPagoWebhook } from "./mercadopago"
+import type { WalletService } from "./wallet"
+import type { Business } from "../../src/lib/types"
 
 const STATUS: Record<string, number> = {
   unauthenticated: 401,
@@ -49,9 +51,10 @@ export interface AppDeps {
   messenger: Messenger
   now?: () => number
   limiter?: RateLimiter
+  wallets?: WalletService
 }
 
-export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter() }: AppDeps) {
+export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets }: AppDeps) {
   const app = new Hono()
 
   app.use("*", async (c, next) => {
@@ -134,6 +137,7 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       simulator: config.simulator,
       baseUrl: config.publicUrl,
       messenger,
+      wallets,
     }
 
     const service = createService(store, ctx)
@@ -153,6 +157,17 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       console.error(`[rpc] ${name} failed`, error)
       return c.json({ error: { message: "Algo salió mal en el servidor. Inténtalo otra vez.", code: "server" } }, 500)
     }
+  })
+
+  // Logo and strip of a business for Google Wallet, which downloads images from a public URL.
+  app.get("/api/public/brand/:businessId/:kind", async (c) => {
+    const kind = c.req.param("kind")
+    if (kind !== "logo" && kind !== "strip") return c.notFound()
+    const business = (await pool.query<{ data: Business }>("select data from businesses where pk = $1", [c.req.param("businessId")])).rows[0]?.data
+    const dataUrl = kind === "logo" ? business?.brand.logo : business?.brand.strip
+    const match = dataUrl?.match(/^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/)
+    if (!match) return kind === "logo" ? c.redirect("/brand/loyaloop-icon.png", 302) : c.notFound()
+    return c.body(Buffer.from(match[2], "base64"), 200, { "content-type": match[1], "cache-control": "public, max-age=3600" })
   })
 
   app.post("/api/webhooks/mercadopago/:businessId", (c) => mercadoPagoWebhook(c, { pool, config }))

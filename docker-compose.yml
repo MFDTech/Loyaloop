@@ -27,6 +27,8 @@ services:
       DATABASE_URL: postgresql://loyaloop:${POSTGRES_PASSWORD}@db:5432/loyaloop
       PORT: "3000"
       TRUST_PROXY: "true"
+    volumes:
+      - ./secrets:/app/secrets:ro
     depends_on:
       db:
         condition: service_healthy

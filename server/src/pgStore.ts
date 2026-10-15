@@ -129,12 +129,49 @@ async function persist(client: Client, before: Snapshot, after: DB, scope: Scope
         [JSON.stringify(changed)],
       )
   }
+  await enqueueWalletJobs(client, before, after, scope)
   if (scope !== "global") {
     const id = scope.business
     const at = after.maintenance[id]
     if (at && at !== beforeMaintenance[id])
       await client.query("insert into maintenance (pk, business_id, at, data) values ($1, $1, $2, $3) on conflict (pk) do update set at = excluded.at, data = excluded.data", [id, at, JSON.stringify({ at })])
   }
+}
+
+/**
+ * Queues wallet work in the same transaction as the change, so a pass is never
+ * left out of date: balance changes update the customer's pass, new notices
+ * become push messages, and card or brand changes update the business's design.
+ * Only customers who already added their card to a wallet get jobs.
+ */
+async function enqueueWalletJobs(client: Client, before: Snapshot, after: DB, scope: Scope) {
+  const changedIds = (key: Key) => {
+    const old = before.get(key)!
+    return (after[key] as Row[]).filter((r) => old.get(TABLES[key].pk(r)) !== JSON.stringify(r)).map((r) => TABLES[key].pk(r))
+  }
+  const customers = changedIds("customers")
+  if (customers.length)
+    await client.query(
+      `insert into wallet_jobs (kind, business_id, ref) select 'pass', business_id, customer_id from wallet_passes where customer_id = any($1)
+       on conflict (kind, ref) where status = 'pending' do nothing`,
+      [customers],
+    )
+  const oldNotices = before.get("notices")!
+  const fresh = after.notices.filter((n) => !oldNotices.has(n.id)).map((n) => ({ id: n.id, customer_id: n.customerId, payload: { message: n.message, event: n.event } }))
+  if (fresh.length)
+    await client.query(
+      `insert into wallet_jobs (kind, business_id, ref, payload)
+       select 'message', w.business_id, x.id, x.payload from jsonb_to_recordset($1::jsonb) as x(id text, customer_id text, payload jsonb)
+       join wallet_passes w on w.customer_id = x.customer_id
+       on conflict (kind, ref) where status = 'pending' do nothing`,
+      [JSON.stringify(fresh)],
+    )
+  if (scope !== "global" && (changedIds("businesses").length || changedIds("programs").length || changedIds("rewards").length))
+    await client.query(
+      `insert into wallet_jobs (kind, business_id, ref) select 'class', $1, $1 where exists (select 1 from wallet_passes where business_id = $1)
+       on conflict (kind, ref) where status = 'pending' do nothing`,
+      [scope.business],
+    )
 }
 
 function lockKey(scope: Scope) {

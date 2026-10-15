@@ -60,7 +60,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 | SMS del registro | Elegir proveedor (Twilio, AWS SNS…) y su cuenta | `server/src/messenger.ts` |
 | Correo (invitaciones, contraseñas) | Proveedor (Resend, Amazon SES…) y dominio verificado | `server/src/messenger.ts` |
 | Apple Wallet | Cuenta de Apple Developer y certificado *Pass Type ID*; firmar `.pkpass` y servicio de actualización de pases | nuevo `server/src/wallet/apple.ts` |
-| Google Wallet | Cuenta de emisor de Google Wallet y clase de lealtad | nuevo `server/src/wallet/google.ts` |
+| Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
 | Mercado Pago Point | Credenciales del piloto. El webhook ya valida la firma y guarda cada aviso en `webhook_events`; falta consultar el pago con el token del negocio, ligar cada terminal Point a una caja de LoyaLoop y llamar a `recordPayment` | `server/src/mercadopago.ts` |
 
 Mientras no haya SMS ni correo, el servidor debe correr con `PREVIEW=true`: el código de verificación y los enlaces aparecen en pantalla.
@@ -69,3 +69,16 @@ Mientras no haya SMS ni correo, el servidor debe correr con `PREVIEW=true`: el c
 
 - Los datos de trabajo de un negocio incluyen 400 días de movimientos. Para un negocio con decenas de miles de movimientos al año conviene pasar el resumen y la actividad a consultas SQL agregadas.
 - El límite de intentos vive en la memoria del proceso: con un solo servidor es suficiente.
+
+## Google Wallet
+
+**Cómo funciona.** Cada negocio tiene una *clase* (diseño, logo, reglas) y cada cliente un *objeto* (saldo, nivel y QR con su token). Al registrarse o recuperar la tarjeta, el servidor crea o actualiza ambos y devuelve un enlace firmado «Agregar a Google Wallet». Después, cada cambio de saldo, nivel o marca se encola en `wallet_jobs` dentro de la misma transacción y un proceso en segundo plano lo manda a Google, con reintentos (1, 2, 4… minutos, hasta 8 veces). Los avisos (puntos ganados, recompensa disponible, puntos por vencer) llegan como notificación en el celular. Si Google falla al registrarse, la tarjeta se crea igual y el cliente puede agregarla después con «Recupérala».
+
+**Configurarlo (una sola vez):**
+1. En [Google Pay & Wallet Console](https://pay.google.com/business/console) crea la cuenta de emisor y copia el **ID de emisor** (Google Wallet API → arriba).
+2. En [Google Cloud Console](https://console.cloud.google.com) crea un proyecto, activa **Google Wallet API**, crea una **cuenta de servicio** y descarga su llave en **JSON**.
+3. De vuelta en Wallet Console → **Usuarios**, invita el correo de la cuenta de servicio (`…@….iam.gserviceaccount.com`) como **Desarrollador**.
+4. En el VPS: guarda la llave como `secrets/google-wallet.json` y dale lectura a la app (`chown 1000 secrets/google-wallet.json && chmod 600 secrets/google-wallet.json`), pon `GOOGLE_WALLET_ISSUER_ID` en `.env` y reinicia (`docker compose up -d`).
+5. Mientras la cuenta está en modo demo, los pases dicen «[TEST ONLY]» y solo los pueden guardar los correos que agregues como usuarios de prueba. Cuando funcione, pide **acceso de publicación** en la consola.
+
+Google descarga el logo desde `https://<dominio>/api/public/brand/<negocio>/logo`, así que solo funciona con el servidor ya publicado con HTTPS. Los logos deben ser PNG o JPG; si no hay, usa el ícono de LoyaLoop.

@@ -81,6 +81,16 @@ export interface Messenger {
   email(to: string, subject: string, text: string): Promise<void>
 }
 
+/** Links to save a customer's card in each wallet. Empty when the wallet is not configured. */
+export interface WalletLinks {
+  google?: string
+  apple?: string
+}
+
+export interface Wallets {
+  links(businessId: string, customerId: string): Promise<WalletLinks>
+}
+
 export interface Context {
   now(): number
   session(): Promise<Session | null>
@@ -96,6 +106,8 @@ export interface Context {
   /** Absolute base URL for links sent by email, e.g. https://loyaloop.mx/ */
   baseUrl: string
   messenger: Messenger
+  /** Issues real passes (server only). */
+  wallets?: Wallets
   online?(): boolean
 }
 
@@ -1153,7 +1165,7 @@ export function createService(store: Store, ctx: Context) {
     return { previewCode: ctx.preview ? result.sms : "", existing: result.existing }
   }
 
-  async function completeRegistration(code: string, input: RegistrationInput, sms: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean }> {
+  async function completeRegistration(code: string, input: RegistrationInput, sms: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {
     const { branch, business } = await branchByCode(code)
     const phone = normalizePhone(String(input.phone || ""))
     const result = await store.write(B(business.id), (db) => {
@@ -1199,10 +1211,20 @@ export function createService(store: Store, ctx: Context) {
         engine.recomputeTier(db, customer, now())
         created = true
       }
-      return { card: publicCard(db, business.id), holder: holder(db, customer), created }
+      return { card: publicCard(db, business.id), holder: holder(db, customer), created, customerId: customer.id }
     })
     if ("wrong" in result) throw new ApiError(`El código no coincide. Te quedan ${result.wrong} intentos.`, "wrong_code")
-    return result
+    const { customerId, ...rest } = result
+    let links: WalletLinks = {}
+    if (ctx.wallets) {
+      try {
+        links = await ctx.wallets.links(business.id, customerId)
+      } catch (error) {
+        // The card exists either way; the person can add it to the wallet later with «Recupérala».
+        console.error("[wallet] no se pudo preparar el pase", (error as Error).message)
+      }
+    }
+    return { ...rest, links }
   }
 
   async function recoverCard(code: string, phoneInput: string, sms: string) {
