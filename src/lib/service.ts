@@ -76,9 +76,20 @@ export interface Store {
   businessStats(since: string): Promise<{ businessId: string; customers: number; branches: number; transactions: number; inReview: number }[]>
 }
 
+export interface EmailMessage {
+  to: string
+  subject: string
+  heading: string
+  paragraphs: string[]
+  action?: { label: string; url: string }
+  footnote?: string
+}
+
 export interface Messenger {
+  /** Which channels really reach people. Without them, codes and links only work in preview. */
+  channels: { sms: boolean; email: boolean }
   sms(phone: string, text: string): Promise<void>
-  email(to: string, subject: string, text: string): Promise<void>
+  email(message: EmailMessage): Promise<void>
 }
 
 /** Links to save a customer's card in each wallet. Empty when the wallet is not configured. */
@@ -406,6 +417,18 @@ export function createService(store: Store, ctx: Context) {
     return `${ctx.baseUrl}${hashPath}`
   }
 
+  /** Sends an email if a provider is configured. A failed email never undoes the action. */
+  async function sendEmail(message: EmailMessage) {
+    if (!ctx.messenger.channels.email) return false
+    try {
+      await ctx.messenger.email(message)
+      return true
+    } catch (error) {
+      console.error("[email] no se pudo enviar", (error as Error).message)
+      return false
+    }
+  }
+
   // ------------------------------------------------------------ session
 
   async function me(): Promise<Me | null> {
@@ -449,9 +472,16 @@ export function createService(store: Store, ctx: Context) {
       d.resets.push({ token, userId: user.id, expiresAt: iso(now() + 60 * MINUTE) })
     })
     const path = `#/restablecer/${token}`
-    if (ctx.preview) return { previewLink: path }
-    await ctx.messenger.email(user.email, "Restablece tu contraseña de LoyaLoop", `Hola, ${user.name}.\n\nPara crear una contraseña nueva abre este enlace (vence en una hora):\n${link(path)}\n\nSi no lo pediste, ignora este correo.`)
-    return {}
+    await sendEmail({
+      to: user.email,
+      subject: "Restablece tu contraseña de LoyaLoop",
+      heading: "Crea una contraseña nueva",
+      paragraphs: [`Hola, ${user.name}.`, "Recibimos una solicitud para cambiar la contraseña de tu cuenta de LoyaLoop. El enlace vence en una hora."],
+      action: { label: "Crear contraseña nueva", url: link(path) },
+      footnote: "Si no lo pediste, ignora este correo: tu contraseña no cambia.",
+    })
+    // The link is shown on screen only in preview: anywhere else it would let anyone take over the account.
+    return ctx.preview ? { previewLink: path } : {}
   }
 
   function checkPassword(password: unknown) {
@@ -811,7 +841,14 @@ export function createService(store: Store, ctx: Context) {
       return db.businesses.find((b) => b.id === a.businessId)!.name
     })
     const path = `#/invitacion/${token}`
-    if (!ctx.preview) await ctx.messenger.email(email, `Te invitaron al panel de ${businessName}`, `Hola, ${name}.\n\nCrea tu contraseña para entrar al panel de LoyaLoop de ${businessName}:\n${link(path)}`)
+    await sendEmail({
+      to: email,
+      subject: `Te invitaron al panel de ${businessName}`,
+      heading: `Bienvenido al equipo de ${businessName}`,
+      paragraphs: [`Hola, ${name}.`, `Te dieron acceso al panel de LoyaLoop de ${businessName}. Crea tu contraseña para entrar.`],
+      action: { label: "Crear mi contraseña", url: link(path) },
+      footnote: "Si no esperabas esta invitación, ignora este correo.",
+    })
     return { link: path }
   }
 
@@ -978,7 +1015,13 @@ export function createService(store: Store, ctx: Context) {
       audit(db, a, id, "Dio de alta el negocio", `${input.branches.length} sucursal(es), tarjeta de ${input.program.type}`, now())
     })
     const path = `#/invitacion/${token}`
-    if (!ctx.preview) await ctx.messenger.email(ownerEmail, `Tu panel de LoyaLoop para ${name}`, `Hola.\n\nYa está lista la tarjeta de lealtad de ${name}. Crea tu contraseña para entrar a tu panel:\n${link(path)}`)
+    await sendEmail({
+      to: ownerEmail,
+      subject: `Tu panel de LoyaLoop para ${name}`,
+      heading: "Tu tarjeta de lealtad está lista",
+      paragraphs: [`Hola, ${text(input.ownerName, 80) || text(input.contactName, 80)}.`, `Ya configuramos la tarjeta de lealtad de ${name}. Crea tu contraseña para ver a tus clientes, sus visitas y sus recompensas.`],
+      action: { label: "Entrar a mi panel", url: link(path) },
+    })
     return { id, inviteLink: path }
   }
 
@@ -1161,7 +1204,8 @@ export function createService(store: Store, ctx: Context) {
       return { sms, existing }
     })
     const name = business.discreet ? business.neutralName : business.name
-    if (!ctx.preview) await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
+    if (ctx.messenger.channels.sms) await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
+    else if (!ctx.preview) throw new ApiError("Por ahora no podemos enviar códigos. Inténtalo más tarde.", "unavailable")
     return { previewCode: ctx.preview ? result.sms : "", existing: result.existing }
   }
 

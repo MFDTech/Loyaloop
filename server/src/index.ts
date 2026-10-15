@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server"
 import { createApp } from "./app"
 import { loadConfig } from "./config"
 import { createPool, migrate } from "./db"
-import { consoleMessenger } from "./messenger"
+import { createMessenger } from "./messenger"
 import { createPgStore } from "./pgStore"
 import { purgeExpiredSessions } from "./sessions"
 import { createWallets } from "./wallet"
@@ -12,7 +12,9 @@ const config = loadConfig()
 const pool = createPool(config.databaseUrl)
 await migrate(pool)
 
-if (!config.preview) console.warn("[aviso] No hay proveedor de SMS ni de correo: los códigos y enlaces solo quedan en el registro del servidor. Usa PREVIEW=true mientras tanto.")
+const messenger = createMessenger(config)
+if (!messenger.channels.email) console.warn("[aviso] Correo sin configurar (RESEND_API_KEY): invitaciones y contraseñas solo quedan en el registro.")
+if (!messenger.channels.sms && !config.preview) console.warn("[aviso] Sin proveedor de SMS y con PREVIEW=false: los clientes no pueden registrarse. Usa PREVIEW=true mientras tanto.")
 if (config.simulator) console.warn("[aviso] El simulador de cobros está encendido (SIMULATOR=true). Apágalo en producción.")
 
 let google: GoogleWallet | null = null
@@ -23,7 +25,7 @@ if (config.googleWalletIssuerId && config.googleWalletKeyFile) {
 const wallets = createWallets(pool, google)
 const stopWallets = wallets.start()
 
-const app = createApp({ pool, store: createPgStore(pool), config, messenger: consoleMessenger, wallets })
+const app = createApp({ pool, store: createPgStore(pool), config, messenger, wallets })
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => console.log(`[loyaloop] escuchando en el puerto ${info.port} · ${config.publicUrl}`))
 
 const timer = setInterval(() => purgeExpiredSessions(pool).catch((e) => console.error("[sessions]", e.message)), 60 * 60_000)

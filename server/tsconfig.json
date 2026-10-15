@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "../src/lib", "../src/vite-env.d.ts", "../tests/harness.ts"]
+  "include": ["src", "../src/lib", "../src/vite-env.d.ts", "../tests"]
 }

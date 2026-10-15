@@ -119,7 +119,7 @@ const localContext: Context = {
   preview: true,
   simulator: true,
   baseUrl: typeof window === "undefined" ? "" : window.location.href.split("#")[0],
-  messenger: { sms: async () => undefined, email: async () => undefined },
+  messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
   online: () => typeof navigator === "undefined" || navigator.onLine !== false,
 }
 

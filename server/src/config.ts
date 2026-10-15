@@ -17,6 +17,10 @@ export interface Config {
   /** Google Wallet issuer id (Google Pay & Wallet Console) and service account key file. */
   googleWalletIssuerId: string
   googleWalletKeyFile: string
+  /** Resend API key and sender. Without a key, emails only go to the log. */
+  resendApiKey: string
+  emailFrom: string
+  emailReplyTo: string
 }
 
 const flag = (value: string | undefined, fallback = false) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(value.toLowerCase()))
@@ -37,5 +41,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mercadoPagoWebhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET || "",
     googleWalletIssuerId: env.GOOGLE_WALLET_ISSUER_ID || "",
     googleWalletKeyFile: env.GOOGLE_WALLET_KEY_FILE || "",
+    resendApiKey: env.RESEND_API_KEY || "",
+    emailFrom: env.EMAIL_FROM || "LoyaLoop <notificaciones@loyaloop.com.mx>",
+    emailReplyTo: env.EMAIL_REPLY_TO || "",
   }
 }

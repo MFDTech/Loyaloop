@@ -58,7 +58,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 | Pieza | Qué se necesita | Dónde va |
 |---|---|---|
 | SMS del registro | Elegir proveedor (Twilio, AWS SNS…) y su cuenta | `server/src/messenger.ts` |
-| Correo (invitaciones, contraseñas) | Proveedor (Resend, Amazon SES…) y dominio verificado | `server/src/messenger.ts` |
+| Correo (invitaciones, contraseñas) | **Programado** con Resend. Falta: verificar `loyaloop.com.mx` en Resend y poner `RESEND_API_KEY` | `.env` |
 | Apple Wallet | Cuenta de Apple Developer y certificado *Pass Type ID*; firmar `.pkpass` y servicio de actualización de pases | nuevo `server/src/wallet/apple.ts` |
 | Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
 | Mercado Pago Point | Credenciales del piloto. El webhook ya valida la firma y guarda cada aviso en `webhook_events`; falta consultar el pago con el token del negocio, ligar cada terminal Point a una caja de LoyaLoop y llamar a `recordPayment` | `server/src/mercadopago.ts` |
@@ -82,3 +82,12 @@ Mientras no haya SMS ni correo, el servidor debe correr con `PREVIEW=true`: el c
 5. Mientras la cuenta está en modo demo, los pases dicen «[TEST ONLY]» y solo los pueden guardar los correos que agregues como usuarios de prueba. Cuando funcione, pide **acceso de publicación** en la consola.
 
 Google descarga el logo desde `https://<dominio>/api/public/brand/<negocio>/logo`, así que solo funciona con el servidor ya publicado con HTTPS. Los logos deben ser PNG o JPG; si no hay, usa el ícono de LoyaLoop.
+
+## Correo con Resend
+
+Las invitaciones, el alta de un negocio y el cambio de contraseña se envían como correo con la marca de LoyaLoop (`server/src/messenger.ts`). Si el envío falla, la acción no se deshace y queda en el registro. El enlace para restablecer contraseña nunca se muestra en pantalla fuera de la vista previa.
+
+1. Crea la cuenta en [resend.com](https://resend.com) → **Domains** → **Add domain** → `loyaloop.com.mx`, región **North Virginia (us-east-1)**.
+2. Agrega en Cloudflare (DNS) los registros que Resend muestra (DKIM `TXT`, y `MX` + `TXT` del subdominio `send`), todos en **DNS only**. Resend ofrece hacerlo solo con «Sign in to Cloudflare».
+3. Cuando el dominio diga **Verified**, crea una **API key** con permiso *Sending access* y ponla en `RESEND_API_KEY` en el `.env` del servidor.
+4. Opcional: en Cloudflare → **Email** → **Email Routing**, crea `hola@loyaloop.com.mx` reenviando a tu Gmail para recibir respuestas.

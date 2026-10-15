@@ -28,7 +28,7 @@ function fakeGoogle() {
   const calls: Call[] = []
   const resources = new Map<string, any>()
   let failNext = 0
-  const fetch = (async (input: string | URL, init?: RequestInit) => {
+  const fetch: typeof globalThis.fetch = (async (input: string | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input)
     const method = init?.method || "GET"
     if (url === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "token-de-prueba", expires_in: 3600 })
@@ -53,7 +53,7 @@ function fakeGoogle() {
     }
     if (method === "POST" && path.endsWith("/addMessage")) return Response.json({})
     return Response.json({ error: { message: "ruta desconocida" } }, { status: 404 })
-  }) as typeof fetch
+  }) as typeof globalThis.fetch
   return { fetch, calls, resources, fail: (n: number) => (failNext = n) }
 }
 
@@ -69,6 +69,9 @@ const config: Config = {
   mercadoPagoWebhookSecret: "",
   googleWalletIssuerId: "3388000000012345678",
   googleWalletKeyFile: "",
+  resendApiKey: "",
+  emailFrom: "LoyaLoop <notificaciones@loyaloop.test>",
+  emailReplyTo: "",
 }
 
 describe("Google Wallet pass building", () => {
@@ -128,7 +131,7 @@ describe.skipIf(!TEST_DATABASE_URL)("Google Wallet with the server", () => {
     g = fakeGoogle()
     const google = new GoogleWallet({ issuerId: config.googleWalletIssuerId, account, publicUrl: config.publicUrl, fetch: g.fetch })
     wallets = createWallets(pool, google)
-    app = createApp({ pool, store: createPgStore(pool), config, messenger: { sms: async () => undefined, email: async () => undefined }, wallets })
+    app = createApp({ pool, store: createPgStore(pool), config, messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined }, wallets })
   })
 
   async function rpc(method: string, args: unknown[] = [], headers: Record<string, string> = {}) {
@@ -158,7 +161,7 @@ describe.skipIf(!TEST_DATABASE_URL)("Google Wallet with the server", () => {
       preview: true,
       simulator: true,
       baseUrl: "",
-      messenger: { sms: async () => undefined, email: async () => undefined },
+      messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
     }
     return createService(createPgStore(pool), ctx)
   }

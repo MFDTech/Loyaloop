@@ -34,7 +34,7 @@ function context(clock: () => number) {
     preview: true,
     simulator: true,
     baseUrl: "http://localhost/",
-    messenger: { sms: async () => undefined, email: async () => undefined },
+    messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
   }
   return { ctx, setDevice: (t: string | null) => (device = t), clear: () => ((session = null), (device = null)) }
 }

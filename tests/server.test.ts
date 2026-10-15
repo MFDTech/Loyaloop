@@ -21,6 +21,11 @@ const config: Config = {
   trustProxy: true,
   secureCookies: true,
   mercadoPagoWebhookSecret: "secreto-de-prueba",
+  googleWalletIssuerId: "",
+  googleWalletKeyFile: "",
+  resendApiKey: "",
+  emailFrom: "LoyaLoop <notificaciones@loyaloop.test>",
+  emailReplyTo: "",
 }
 
 describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
@@ -44,7 +49,7 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
       pool,
       store: createPgStore(pool),
       config,
-      messenger: { sms: async (to, text) => void sent.push({ to, text }), email: async (to, _s, text) => void sent.push({ to, text }) },
+      messenger: { channels: { sms: true, email: true }, sms: async (to, text) => void sent.push({ to, text }), email: async (m) => void sent.push({ to: m.to, text: m.action?.url || "" }) },
     })
     ip += 1
   })
@@ -187,7 +192,7 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
       preview: false,
       simulator: false,
       baseUrl: "",
-      messenger: { sms: async () => undefined, email: async () => undefined },
+      messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
     })
     const results = await Promise.all(
       ["A", "B"].map((x) => service.recordPayment({ businessId: "b_affair", registerId: "rg_affair_1", provider: "mercadopago", externalId: `MP-${x}`, amount: 500, tip: 0 })),
