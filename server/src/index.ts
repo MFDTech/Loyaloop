@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { serve } from "@hono/node-server"
 import { createApp } from "./app"
 import { loadConfig } from "./config"
@@ -18,7 +19,9 @@ if (!messenger.channels.sms && !config.preview) console.warn("[aviso] Sin provee
 if (config.simulator) console.warn("[aviso] El simulador de cobros está encendido (SIMULATOR=true). Apágalo en producción.")
 
 let google: GoogleWallet | null = null
-if (config.googleWalletIssuerId && config.googleWalletKeyFile) {
+if (config.googleWalletIssuerId && config.googleWalletKeyFile && !existsSync(config.googleWalletKeyFile)) {
+  console.warn(`[aviso] Google Wallet apagado: no existe ${config.googleWalletKeyFile}.`)
+} else if (config.googleWalletIssuerId && config.googleWalletKeyFile) {
   google = new GoogleWallet({ issuerId: config.googleWalletIssuerId, account: loadServiceAccount(config.googleWalletKeyFile), publicUrl: config.publicUrl })
   console.log(`[wallet] Google Wallet activo (emisor ${config.googleWalletIssuerId})`)
 } else console.warn("[aviso] Google Wallet sin configurar: faltan GOOGLE_WALLET_ISSUER_ID y GOOGLE_WALLET_KEY_FILE.")
