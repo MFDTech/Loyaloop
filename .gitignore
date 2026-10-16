@@ -25,3 +25,4 @@ server/dist/
 backups/
 secrets/
 *.json.key
+*.whl
