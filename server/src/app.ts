@@ -11,6 +11,7 @@ import { hashPassword, verifyPassword } from "./passwords"
 import { LIMITS, RateLimiter } from "./rateLimit"
 import { SESSION_COOKIE, SESSION_DAYS, createSession, deleteSession, deleteUserSessions, findSession, updateSession } from "./sessions"
 import { mercadoPagoWebhook } from "./mercadopago"
+import { appleRoutes } from "./wallet/appleRoutes"
 import type { WalletService } from "./wallet"
 import type { Business } from "../../src/lib/types"
 
@@ -171,6 +172,8 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
   })
 
   app.post("/api/webhooks/mercadopago/:businessId", (c) => mercadoPagoWebhook(c, { pool, config }))
+
+  appleRoutes(app, wallets?.apple ?? null)
 
   app.all("/api/*", (c) => c.json({ error: { message: "No encontrado.", code: "not_found" } }, 404))
 

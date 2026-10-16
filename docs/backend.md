@@ -59,7 +59,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 |---|---|---|
 | SMS del registro | Elegir proveedor (Twilio, AWS SNS…) y su cuenta | `server/src/messenger.ts` |
 | Correo (invitaciones, contraseñas) | **Programado** con Resend. Falta: verificar `loyaloop.com.mx` en Resend y poner `RESEND_API_KEY` | `.env` |
-| Apple Wallet | Cuenta de Apple Developer y certificado *Pass Type ID*; firmar `.pkpass` y servicio de actualización de pases | nuevo `server/src/wallet/apple.ts` |
+| Apple Wallet | **Programado** (`server/src/wallet/apple.ts`). Falta: que Apple apruebe la cuenta de desarrollador y crear el certificado, ver abajo | `.env` y `secrets/` |
 | Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
 | Mercado Pago Point | Credenciales del piloto. El webhook ya valida la firma y guarda cada aviso en `webhook_events`; falta consultar el pago con el token del negocio, ligar cada terminal Point a una caja de LoyaLoop y llamar a `recordPayment` | `server/src/mercadopago.ts` |
 
@@ -91,3 +91,30 @@ Las invitaciones, el alta de un negocio y el cambio de contraseña se envían co
 2. Agrega en Cloudflare (DNS) los registros que Resend muestra (DKIM `TXT`, y `MX` + `TXT` del subdominio `send`), todos en **DNS only**. Resend ofrece hacerlo solo con «Sign in to Cloudflare».
 3. Cuando el dominio diga **Verified**, crea una **API key** con permiso *Sending access* y ponla en `RESEND_API_KEY` en el `.env` del servidor.
 4. Opcional: en Cloudflare → **Email** → **Email Routing**, crea `hola@loyaloop.com.mx` reenviando a tu Gmail para recibir respuestas.
+
+## Apple Wallet
+
+**Cómo funciona.** Al registrarse o recuperar la tarjeta, el cliente recibe el enlace `https://<dominio>/api/apple/download/<cliente>?t=<token>`. Safari abre el archivo `.pkpass` y muestra «Agregar». El pase se arma en el momento: `pass.json` (saldo, nivel, QR con el token del cliente, reglas al reverso), ícono y logo del negocio, y en tarjetas de sellos una franja con los sellos dibujados. Se firma con el certificado *Pass Type ID* (más el intermedio WWDR de Apple).
+
+Cuando el iPhone guarda el pase, se registra con el servidor (`/api/apple/v1/devices/...`). Después, cada cambio de saldo, nivel, marca o un aviso nuevo se encola en `wallet_jobs` igual que Google; el proceso en segundo plano marca el pase como cambiado y manda un *push* vacío por APNs; el iPhone pregunta qué cambió y descarga el pase nuevo. Los avisos (puntos ganados, recompensa disponible…) aparecen en la pantalla de bloqueo gracias a los `changeMessage` y al campo «Último aviso» del reverso. Si Apple responde que un dispositivo ya no existe, se borra su registro. Los negocios discretos usan el nombre neutral y no muestran su logo.
+
+**Configurarlo (cuando Apple apruebe la cuenta), todo en el VPS:**
+1. Crea la llave y la solicitud de certificado (no salen del servidor):
+   ```bash
+   cd ~/loyaloop/secrets
+   openssl req -new -newkey rsa:2048 -nodes -keyout apple-pass.key -out apple-pass.csr -subj "/CN=LoyaLoop Pass/O=LoyaLoop/C=MX"
+   cat apple-pass.csr   # copia todo el texto
+   ```
+2. En [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list/passTypeId) → **Identifiers** → **+** → **Pass Type IDs**, crea `pass.mx.com.loyaloop.tarjeta` (o el que prefieras).
+3. Entra al identificador → **Create Certificate** → sube el `apple-pass.csr` (guárdalo en tu Mac como archivo) → descarga `pass.cer` y súbelo al VPS: `scp pass.cer root@IP:/root/loyaloop/secrets/`.
+4. Conviértelo y baja el certificado intermedio de Apple:
+   ```bash
+   cd ~/loyaloop/secrets
+   openssl x509 -inform der -in pass.cer -out apple-pass.pem
+   curl -sO https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer
+   openssl x509 -inform der -in AppleWWDRCAG4.cer -out apple-wwdr.pem
+   chown 1000 apple-* && chmod 600 apple-*
+   ```
+5. En `.env` pon `APPLE_PASS_TYPE_ID` (el identificador del paso 2) y `APPLE_TEAM_ID` (Membership → Team ID, 10 caracteres). Reinicia: `docker compose up -d`. El registro debe decir `[wallet] Apple Wallet activo`.
+
+El certificado dura un año: Apple avisa por correo; se renueva repitiendo los pasos 3 y 4 con la misma `apple-pass.key`. Las pruebas (`tests/apple.test.ts`) usan certificados falsos generados al vuelo y verifican la firma con openssl, así que el código ya está probado sin cuenta de Apple.

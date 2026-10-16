@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { serve } from "@hono/node-server"
 import { createApp } from "./app"
 import { loadConfig } from "./config"
@@ -7,6 +8,7 @@ import { createMessenger } from "./messenger"
 import { createPgStore } from "./pgStore"
 import { purgeExpiredSessions } from "./sessions"
 import { createWallets } from "./wallet"
+import { AppleWallet, apnsPusher, loadAppleCredentials } from "./wallet/apple"
 import { GoogleWallet, loadServiceAccount } from "./wallet/google"
 
 const config = loadConfig()
@@ -25,7 +27,25 @@ if (config.googleWalletIssuerId && config.googleWalletKeyFile && !existsSync(con
   google = new GoogleWallet({ issuerId: config.googleWalletIssuerId, account: loadServiceAccount(config.googleWalletKeyFile), publicUrl: config.publicUrl })
   console.log(`[wallet] Google Wallet activo (emisor ${config.googleWalletIssuerId})`)
 } else console.warn("[aviso] Google Wallet sin configurar: faltan GOOGLE_WALLET_ISSUER_ID y GOOGLE_WALLET_KEY_FILE.")
-const wallets = createWallets(pool, google)
+let apple: AppleWallet | null = null
+const appleFiles = { cert: config.applePassCert, key: config.applePassKey, wwdr: config.appleWwdrCert }
+if (config.applePassTypeId && config.appleTeamId && Object.values(appleFiles).every(Boolean)) {
+  const missing = Object.values(appleFiles).filter((file) => !existsSync(file))
+  if (missing.length) console.warn(`[aviso] Apple Wallet apagado: no existe ${missing.join(", ")}.`)
+  else {
+    try {
+      const credentials = loadAppleCredentials(appleFiles, { passTypeId: config.applePassTypeId, teamId: config.appleTeamId, keyPassphrase: config.applePassKeyPassphrase || undefined })
+      const icon = [join(config.staticDir, "brand/loyaloop-icon.png"), "public/brand/loyaloop-icon.png"].find(existsSync)
+      if (!icon) throw new Error("no se encontró brand/loyaloop-icon.png")
+      apple = new AppleWallet({ ...credentials, publicUrl: config.publicUrl, defaultIcon: readFileSync(icon), pusher: apnsPusher(credentials) })
+      console.log(`[wallet] Apple Wallet activo (${config.applePassTypeId})`)
+    } catch (error) {
+      console.error(`[aviso] Apple Wallet apagado: ${(error as Error).message}`)
+    }
+  }
+} else console.warn("[aviso] Apple Wallet sin configurar: faltan APPLE_PASS_TYPE_ID, APPLE_TEAM_ID y los certificados.")
+if (apple && !config.publicUrl.startsWith("https://")) console.warn("[aviso] Apple Wallet necesita PUBLIC_URL con https para actualizar los pases.")
+const wallets = createWallets(pool, google, apple)
 const stopWallets = wallets.start()
 
 const app = createApp({ pool, store: createPgStore(pool), config, messenger, wallets })

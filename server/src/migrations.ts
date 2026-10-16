@@ -214,4 +214,22 @@ create unique index wallet_jobs_pending on wallet_jobs (kind, ref) where status 
 create index wallet_jobs_due on wallet_jobs (status, run_after);
 `,
   },
+  {
+    id: "004_apple",
+    sql: `
+-- Apple Wallet: secret token the pass sends back, and when it last changed.
+alter table wallet_passes add column apple_auth_token text;
+alter table wallet_passes add column apple_updated_at timestamptz not null default now();
+
+-- iPhones (and Apple Watches) that installed a pass and want update pushes.
+create table apple_registrations (
+  device_id text not null,
+  serial text not null,
+  push_token text not null,
+  created_at timestamptz not null default now(),
+  primary key (device_id, serial)
+);
+create index apple_registrations_serial on apple_registrations (serial);
+`,
+  },
 ]

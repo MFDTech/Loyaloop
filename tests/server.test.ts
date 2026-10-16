@@ -26,6 +26,12 @@ const config: Config = {
   resendApiKey: "",
   emailFrom: "LoyaLoop <notificaciones@loyaloop.test>",
   emailReplyTo: "",
+  applePassTypeId: "",
+  appleTeamId: "",
+  applePassCert: "",
+  applePassKey: "",
+  applePassKeyPassphrase: "",
+  appleWwdrCert: "",
 }
 
 describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {

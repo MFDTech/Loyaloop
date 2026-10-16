@@ -72,6 +72,12 @@ const config: Config = {
   resendApiKey: "",
   emailFrom: "LoyaLoop <notificaciones@loyaloop.test>",
   emailReplyTo: "",
+  applePassTypeId: "",
+  appleTeamId: "",
+  applePassCert: "",
+  applePassKey: "",
+  applePassKeyPassphrase: "",
+  appleWwdrCert: "",
 }
 
 describe("Google Wallet pass building", () => {

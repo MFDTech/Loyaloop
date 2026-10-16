@@ -193,9 +193,14 @@ export class GoogleWallet {
   }
 
   /** A message on the pass. TEXT_AND_NOTIFY also shows a notification on the phone. */
-  addMessage(customerId: string, message: { id: string; header: string; body: string }) {
-    return this.call("POST", `/loyaltyObject/${encodeURIComponent(this.objectId(customerId))}/addMessage`, {
-      message: { id: safe(message.id), header: cut(message.header, 40), body: cut(message.body, 200), messageType: "TEXT_AND_NOTIFY" },
-    })
+  async addMessage(customerId: string, message: { id: string; header: string; body: string }) {
+    try {
+      await this.call("POST", `/loyaltyObject/${encodeURIComponent(this.objectId(customerId))}/addMessage`, {
+        message: { id: safe(message.id), header: cut(message.header, 40), body: cut(message.body, 200), messageType: "TEXT_AND_NOTIFY" },
+      })
+    } catch (error) {
+      // A retry of a message Google already has (the job failed on Apple's side).
+      if (!(error instanceof GoogleWalletError) || error.status !== 409) throw error
+    }
   }
 }

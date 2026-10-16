@@ -21,6 +21,13 @@ export interface Config {
   resendApiKey: string
   emailFrom: string
   emailReplyTo: string
+  /** Apple Wallet: Pass Type ID, Team ID and PEM files of the certificate, its key and Apple's WWDR certificate. */
+  applePassTypeId: string
+  appleTeamId: string
+  applePassCert: string
+  applePassKey: string
+  applePassKeyPassphrase: string
+  appleWwdrCert: string
 }
 
 const flag = (value: string | undefined, fallback = false) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(value.toLowerCase()))
@@ -44,5 +51,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     resendApiKey: env.RESEND_API_KEY || "",
     emailFrom: env.EMAIL_FROM || "LoyaLoop <notificaciones@loyaloop.com.mx>",
     emailReplyTo: env.EMAIL_REPLY_TO || "",
+    applePassTypeId: env.APPLE_PASS_TYPE_ID || "",
+    appleTeamId: env.APPLE_TEAM_ID || "",
+    applePassCert: env.APPLE_PASS_CERT || "",
+    applePassKey: env.APPLE_PASS_KEY || "",
+    applePassKeyPassphrase: env.APPLE_PASS_KEY_PASSPHRASE || "",
+    appleWwdrCert: env.APPLE_WWDR_CERT || "",
   }
 }
