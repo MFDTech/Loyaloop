@@ -40,7 +40,7 @@ export default function Registration({ code }: { code: string }) {
   const [preview, setPreview] = useState("")
   const [existing, setExisting] = useState(false)
   const [cooldown, setCooldown] = useState(0)
-  const [result, setResult] = useState<{ card: api.PublicCard; holder: api.CardHolder; created: boolean } | null>(null)
+  const [result, setResult] = useState<{ card: api.PublicCard; holder: api.CardHolder; created: boolean; links: api.WalletLinks } | null>(null)
   const [localError, setLocalError] = useState("")
   const send = useAction(api.sendCode)
   const confirm = useAction(async (mode: "new" | "recover") => {
@@ -215,7 +215,7 @@ export default function Registration({ code }: { code: string }) {
                   {existing && mode === "new" && " Ya tienes una tarjeta con este celular: al confirmar te la mostramos."}
                 </p>
               </div>
-              {PREVIEW && preview && (
+              {preview && (
                 <Notice tone="info" title="Versión de prueba">
                   Aún no se envían SMS. Tu código es <b className="ll-mono">{preview}</b>.
                 </Notice>
@@ -246,7 +246,7 @@ export default function Registration({ code }: { code: string }) {
             </form>
           )}
 
-          {step === "done" && result && <Done card={result.card} holder={result.holder} code={code} />}
+          {step === "done" && result && <Done card={result.card} holder={result.holder} links={result.links} code={code} />}
         </div>
         <RegFoot discreet={card.discreet} />
       </main>
@@ -254,12 +254,24 @@ export default function Registration({ code }: { code: string }) {
   )
 }
 
-function Done({ card, holder, code }: { card: api.PublicCard; holder: api.CardHolder; code: string }) {
+function Done({ card, holder, links, code }: { card: api.PublicCard; holder: api.CardHolder; links: api.WalletLinks; code: string }) {
   const [device] = useState(platform)
   const [clicked, setClicked] = useState<"" | "apple" | "google">("")
-  const add = (wallet: "apple" | "google") => {
-    // With the server: GET /api/passes/<token>.pkpass (Apple) or the Google "save" link.
-    setClicked(wallet)
+  const showApple = device !== "google"
+  const showGoogle = device !== "apple"
+  const button = (wallet: "apple" | "google") => {
+    const label = wallet === "apple" ? "Agregar a Apple Wallet" : "Agregar a Google Wallet"
+    const className = `ll-wallet-btn ${wallet === "google" ? "is-google" : ""}`
+    const url = links[wallet]
+    return url ? (
+      <a key={wallet} className={className} href={url} target={wallet === "google" ? "_blank" : undefined} rel="noreferrer">
+        <Icon name="wallet" size={22} /> {label}
+      </a>
+    ) : (
+      <button key={wallet} type="button" className={className} onClick={() => setClicked(wallet)}>
+        <Icon name="wallet" size={22} /> {label}
+      </button>
+    )
   }
   return (
     <div className="ll-stack" style={{ gap: 18 }}>
@@ -267,22 +279,14 @@ function Done({ card, holder, code }: { card: api.PublicCard; holder: api.CardHo
         Hola, {holder.name.split(" ")[0]}. Guárdala en tu Wallet y muéstrala en la caja cada vez que pagues.
       </p>
       <div className="ll-stack" style={{ gap: 10 }}>
-        {device !== "google" && (
-          <button type="button" className="ll-wallet-btn" onClick={() => add("apple")}>
-            <Icon name="wallet" size={22} /> Agregar a Apple Wallet
-          </button>
-        )}
-        {device !== "apple" && (
-          <button type="button" className="ll-wallet-btn is-google" onClick={() => add("google")}>
-            <Icon name="wallet" size={22} /> Agregar a Google Wallet
-          </button>
-        )}
+        {showApple && button("apple")}
+        {showGoogle && button("google")}
       </div>
       {clicked && (
-        <Notice tone={PREVIEW ? "info" : "success"}>
+        <Notice tone="info">
           {PREVIEW
-            ? `En esta versión de prueba el pase aún no se descarga: falta conectar el certificado de ${clicked === "apple" ? "Apple" : "Google"}. Mientras tanto, la caja puede escanear el código de abajo.`
-            : "Abriendo tu Wallet…"}
+            ? `En esta versión de prueba el pase aún no se descarga: falta conectar ${clicked === "apple" ? "Apple" : "Google"} Wallet. Mientras tanto, la caja puede escanear el código de abajo.`
+            : `Muy pronto podrás guardarla en ${clicked === "apple" ? "Apple" : "Google"} Wallet. Mientras tanto, toma una captura de este código y muéstralo en la caja.`}
         </Notice>
       )}
       <div className="ll-reg-pass">{device === "google" ? <GooglePass card={card} holder={holder} /> : <ApplePass card={card} holder={holder} />}</div>
