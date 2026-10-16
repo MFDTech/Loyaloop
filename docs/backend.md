@@ -50,7 +50,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 7. **Actualizar** después de cada cambio en GitHub: `git pull && docker compose up -d --build`.
 8. **Firewall:** `ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable`.
 
-**Respaldos.** El servicio `backup` guarda un respaldo diario en `./backups` (se quedan los últimos 14). Copia esa carpeta fuera del VPS de vez en cuando. Para restaurar:
+**Respaldos.** El servicio `backup` guarda un respaldo diario en `./backups` (se quedan los últimos 14) y el servicio `offsite` copia cada uno a Cloudflare R2 (se quedan 30 días allá). Ver «Respaldos fuera del servidor». Para restaurar:
 `docker compose exec -T db pg_restore -U loyaloop -d loyaloop --clean < backups/ARCHIVO.dump`
 
 ## Lo que falta conectar
@@ -118,3 +118,16 @@ Cuando el iPhone guarda el pase, se registra con el servidor (`/api/apple/v1/dev
 5. En `.env` pon `APPLE_PASS_TYPE_ID` (el identificador del paso 2) y `APPLE_TEAM_ID` (Membership → Team ID, 10 caracteres). Reinicia: `docker compose up -d`. El registro debe decir `[wallet] Apple Wallet activo`.
 
 El certificado dura un año: Apple avisa por correo; se renueva repitiendo los pasos 3 y 4 con la misma `apple-pass.key`. Las pruebas (`tests/apple.test.ts`) usan certificados falsos generados al vuelo y verifican la firma con openssl, así que el código ya está probado sin cuenta de Apple.
+
+## Respaldos fuera del servidor (Cloudflare R2)
+
+Si el VPS se pierde, los respaldos de `./backups` se pierden con él. El servicio `offsite` (rclone) revisa cada hora y sube a R2 los respaldos terminados que aún no estén allá; borra en R2 los de más de 30 días. R2 es gratis hasta 10 GB y no cobra por descargar.
+
+**Configurarlo (una sola vez):**
+1. En Cloudflare → **R2 Object Storage** → activa R2 (pide una tarjeta aunque sea gratis) → **Create bucket** → nombre `loyaloop-respaldos`, ubicación automática. Déjalo **privado** (sin dominio público).
+2. En R2 → **Manage API tokens** → **Create API token** → permiso **Object Read & Write**, solo para el bucket `loyaloop-respaldos`. Copia el **Access Key ID** y el **Secret Access Key** (el secreto solo se muestra una vez).
+3. El **Account ID** está en la página principal de R2 (columna derecha).
+4. En el VPS, agrega en `.env`: `R2_ACCOUNT_ID`, `R2_BUCKET=loyaloop-respaldos`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Luego `docker compose up -d`.
+5. Revisa: `docker compose logs offsite` debe decir «respaldos copiados a R2», y el bucket debe mostrar la carpeta `loyaloop/`.
+
+**Restaurar desde R2** (por ejemplo en un VPS nuevo): descarga el `.dump` desde el panel de R2 o bájalo directo a `./backups` con `docker compose run --rm -v "$PWD/backups:/restore" offsite "rclone copy r2:loyaloop-respaldos/loyaloop/ARCHIVO.dump /restore"`, y usa el `pg_restore` de arriba.
