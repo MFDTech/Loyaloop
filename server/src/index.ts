@@ -17,7 +17,9 @@ await migrate(pool)
 
 const messenger = createMessenger(config)
 if (!messenger.channels.email) console.warn("[aviso] Correo sin configurar (RESEND_API_KEY): invitaciones y contraseñas solo quedan en el registro.")
-if (!messenger.channels.sms && !config.preview) console.warn("[aviso] Sin proveedor de SMS y con PREVIEW=false: los clientes no pueden registrarse. Usa PREVIEW=true mientras tanto.")
+if (messenger.verifier) console.log(`[sms] Twilio Verify activo (${config.twilioVerifyChannel})`)
+else if (!config.preview) console.warn("[aviso] Sin proveedor de SMS y con PREVIEW=false: los clientes no pueden registrarse. Usa PREVIEW=true mientras tanto.")
+else console.warn("[aviso] Códigos de registro en pantalla (PREVIEW=true): configura Twilio Verify antes de abrir a clientes.")
 if (config.simulator) console.warn("[aviso] El simulador de cobros está encendido (SIMULATOR=true). Apágalo en producción.")
 
 let google: GoogleWallet | null = null

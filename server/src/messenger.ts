@@ -1,5 +1,6 @@
 import type { EmailMessage, Messenger } from "../../src/lib/service"
 import type { Config } from "./config"
+import { twilioVerifier } from "./twilio"
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -45,13 +46,18 @@ export function resendEmail(options: { apiKey: string; from: string; replyTo?: s
 
 const maskPhone = (phone: string) => `${phone.slice(0, 2)}****${phone.slice(-2)}`
 
-/** Email through Resend when configured; SMS still goes to the log until a provider is chosen. */
+/** Email through Resend and registration codes through Twilio Verify, when configured. */
 export function createMessenger(config: Config, http: typeof fetch = fetch): Messenger {
   const email = config.resendApiKey
     ? resendEmail({ apiKey: config.resendApiKey, from: config.emailFrom, replyTo: config.emailReplyTo || undefined, logoUrl: `${config.publicUrl}brand/loyaloop-icon.png`, fetch: http })
     : null
+  const verifier =
+    config.twilioAccountSid && config.twilioAuthToken && config.twilioVerifySid
+      ? twilioVerifier({ accountSid: config.twilioAccountSid, authToken: config.twilioAuthToken, serviceSid: config.twilioVerifySid, channel: config.twilioVerifyChannel, fetch: http })
+      : undefined
   return {
-    channels: { sms: false, email: !!email },
+    channels: { sms: !!verifier, email: !!email },
+    verifier,
     async sms(phone, text) {
       console.log(`[sms] ${maskPhone(phone)}: ${text.replace(/\d{6}/, "******")}`)
     },

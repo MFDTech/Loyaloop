@@ -78,6 +78,10 @@ const config: Config = {
   applePassKey: "",
   applePassKeyPassphrase: "",
   appleWwdrCert: "",
+  twilioAccountSid: "",
+  twilioAuthToken: "",
+  twilioVerifySid: "",
+  twilioVerifyChannel: "sms",
 }
 
 describe("Google Wallet pass building", () => {

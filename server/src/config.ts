@@ -28,6 +28,11 @@ export interface Config {
   applePassKey: string
   applePassKeyPassphrase: string
   appleWwdrCert: string
+  /** Twilio Verify for registration codes: account, auth token, service (VA…) and channel. */
+  twilioAccountSid: string
+  twilioAuthToken: string
+  twilioVerifySid: string
+  twilioVerifyChannel: "sms" | "whatsapp"
 }
 
 const flag = (value: string | undefined, fallback = false) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(value.toLowerCase()))
@@ -57,5 +62,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     applePassKey: env.APPLE_PASS_KEY || "",
     applePassKeyPassphrase: env.APPLE_PASS_KEY_PASSPHRASE || "",
     appleWwdrCert: env.APPLE_WWDR_CERT || "",
+    twilioAccountSid: env.TWILIO_ACCOUNT_SID || "",
+    twilioAuthToken: env.TWILIO_AUTH_TOKEN || "",
+    twilioVerifySid: env.TWILIO_VERIFY_SID || "",
+    twilioVerifyChannel: env.TWILIO_VERIFY_CHANNEL === "whatsapp" ? "whatsapp" : "sms",
   }
 }

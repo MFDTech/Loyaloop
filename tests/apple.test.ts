@@ -170,6 +170,10 @@ const config: Config = {
   applePassKey: "",
   applePassKeyPassphrase: "",
   appleWwdrCert: "",
+  twilioAccountSid: "",
+  twilioAuthToken: "",
+  twilioVerifySid: "",
+  twilioVerifyChannel: "sms",
 }
 
 describe.skipIf(!TEST_DATABASE_URL)("Apple Wallet web service", () => {

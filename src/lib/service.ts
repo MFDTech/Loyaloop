@@ -85,11 +85,21 @@ export interface EmailMessage {
   footnote?: string
 }
 
+/** A provider that creates and checks the codes itself (Twilio Verify). */
+export interface PhoneVerifier {
+  /** Sends a new code to a 10-digit Mexican number. */
+  start(phone: string): Promise<void>
+  /** True when the code is right. */
+  check(phone: string, code: string): Promise<boolean>
+}
+
 export interface Messenger {
   /** Which channels really reach people. Without them, codes and links only work in preview. */
   channels: { sms: boolean; email: boolean }
   sms(phone: string, text: string): Promise<void>
   email(message: EmailMessage): Promise<void>
+  /** When set, registration codes go through it instead of sms(). */
+  verifier?: PhoneVerifier
 }
 
 /** Links to save a customer's card in each wallet. Empty when the wallet is not configured. */
@@ -1204,6 +1214,16 @@ export function createService(store: Store, ctx: Context) {
       return { sms, existing }
     })
     const name = business.discreet ? business.neutralName : business.name
+    const verifier = ctx.messenger.verifier
+    if (verifier) {
+      try {
+        await verifier.start(phone)
+      } catch (error) {
+        console.error("[sms] no se pudo enviar el código", (error as Error).message)
+        throw new ApiError("No pudimos enviar el código. Revisa el número e inténtalo otra vez.", "unavailable")
+      }
+      return { previewCode: "", existing: result.existing }
+    }
     if (ctx.messenger.channels.sms) await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
     else if (!ctx.preview) throw new ApiError("Por ahora no podemos enviar códigos. Inténtalo más tarde.", "unavailable")
     return { previewCode: ctx.preview ? result.sms : "", existing: result.existing }
@@ -1212,11 +1232,25 @@ export function createService(store: Store, ctx: Context) {
   async function completeRegistration(code: string, input: RegistrationInput, sms: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {
     const { branch, business } = await branchByCode(code)
     const phone = normalizePhone(String(input.phone || ""))
+    const typed = String(sms || "").trim()
+    // With Twilio Verify the provider knows the code: ask it before touching the data.
+    let approved = false
+    if (ctx.messenger.verifier) {
+      const pending = (await store.read(B(business.id))).verifications.find((x) => x.phone === phone && x.businessId === business.id)
+      if (pending && pending.attempts < 5 && new Date(pending.expiresAt).getTime() >= now() && /^\d{4,10}$/.test(typed)) {
+        try {
+          approved = await ctx.messenger.verifier.check(phone, typed)
+        } catch (error) {
+          console.error("[sms] no se pudo revisar el código", (error as Error).message)
+          throw new ApiError("No pudimos revisar el código. Inténtalo otra vez.", "unavailable")
+        }
+      }
+    }
     const result = await store.write(B(business.id), (db) => {
       const v = db.verifications.find((x) => x.phone === phone && x.businessId === business.id)
       if (!v || new Date(v.expiresAt).getTime() < now()) throw new ApiError("El código venció. Pide uno nuevo.", "expired")
       if (v.attempts >= 5) throw new ApiError("Demasiados intentos. Pide un código nuevo.", "too_many")
-      if (v.code !== String(sms || "").trim()) {
+      if (ctx.messenger.verifier ? !approved : v.code !== typed) {
         // Count the failed attempt: return instead of throwing so it is saved.
         v.attempts += 1
         return { wrong: 5 - v.attempts }

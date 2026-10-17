@@ -57,7 +57,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 
 | Pieza | Qué se necesita | Dónde va |
 |---|---|---|
-| SMS del registro | Elegir proveedor (Twilio, AWS SNS…) y su cuenta | `server/src/messenger.ts` |
+| SMS del registro | **Programado** con Twilio Verify (`server/src/twilio.ts`). Falta: cuenta, servicio Verify y llaves, ver abajo | `.env` |
 | Correo (invitaciones, contraseñas) | **Programado** con Resend. Falta: verificar `loyaloop.com.mx` en Resend y poner `RESEND_API_KEY` | `.env` |
 | Apple Wallet | **Programado** (`server/src/wallet/apple.ts`). Falta: que Apple apruebe la cuenta de desarrollador y crear el certificado, ver abajo | `.env` y `secrets/` |
 | Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
@@ -131,3 +131,16 @@ Si el VPS se pierde, los respaldos de `./backups` se pierden con él. El servici
 5. Revisa: `docker compose logs offsite` debe decir «respaldos copiados a R2», y el bucket debe mostrar la carpeta `loyaloop/`.
 
 **Restaurar desde R2** (por ejemplo en un VPS nuevo): descarga el `.dump` desde el panel de R2 o bájalo directo a `./backups` con `docker compose run --rm -v "$PWD/backups:/restore" offsite "rclone copy r2:loyaloop-respaldos/loyaloop/ARCHIVO.dump /restore"`, y usa el `pg_restore` de arriba.
+
+## Twilio Verify (códigos de registro)
+
+Twilio crea el código de 6 dígitos, lo manda por SMS al `+52` del cliente y lo revisa. LoyaLoop nunca lo ve ni lo muestra, aunque `PREVIEW=true`. Se siguen aplicando los límites propios: 30 s entre códigos, 10 minutos de vigencia y 5 intentos. **Fraud Guard** de Twilio bloquea el abuso del formulario para mandar SMS caros.
+
+1. Crea la cuenta en [twilio.com](https://www.twilio.com/try-twilio) y verifica tu correo y tu celular. La cuenta de prueba solo puede mandar a números verificados; para clientes reales, **Upgrade** (agregar saldo, unos US$20).
+2. Consola → **Verify** → **Services** → **Create new**: *Friendly name* `LoyaLoop` (aparece en el SMS; no menciona al negocio), canal **SMS**. Copia el **Service SID** (empieza con `VA`).
+3. En el servicio, **Fraud Guard** activado (viene así) y, en **Geo permissions** de la cuenta, deja solo **México**.
+4. Consola → página principal: **Account SID** (empieza con `AC`) y **Auth Token**.
+5. En el VPS pon `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` y `TWILIO_VERIFY_SID` en `.env` y reinicia. El registro debe decir `[sms] Twilio Verify activo (sms)`.
+6. Prueba un registro con tu celular. Cuando también funcione el correo, cambia `PREVIEW=false`.
+
+WhatsApp: `TWILIO_VERIFY_CHANNEL=whatsapp`, solo después de conectar un remitente de WhatsApp en Twilio.
