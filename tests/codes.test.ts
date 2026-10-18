@@ -5,6 +5,7 @@ import { createSeed } from "../src/lib/seed"
 import { createService, type Context, type PhoneVerifier } from "../src/lib/service"
 import type { DB, Session } from "../src/lib/types"
 import { twilioVerifier } from "../server/src/twilio"
+import { whatsappCodeSender } from "../server/src/whatsapp"
 
 /** Minimal Twilio Verify: one pending code per number, approved once. */
 function fakeTwilio(options: { failStart?: boolean } = {}) {
@@ -92,5 +93,59 @@ describe("Twilio Verify", () => {
     const twilio = fakeTwilio()
     await twilioVerifier({ ...options, channel: "whatsapp", fetch: twilio.fetch }).start("5512349876")
     expect(twilio.calls[0].form.Channel).toBe("whatsapp")
+  })
+})
+
+describe("WhatsApp (Meta Cloud API)", () => {
+  function fakeMeta(status = 200) {
+    const calls: { url: string; auth: string; body: any }[] = []
+    const fetch = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), auth: new Headers(init?.headers).get("authorization") || "", body: JSON.parse(String(init?.body)) })
+      return status === 200
+        ? Response.json({ messaging_product: "whatsapp", messages: [{ id: "wamid.1" }] })
+        : Response.json({ error: { message: "Template name does not exist in the translation", code: 132001 } }, { status })
+    }) as unknown as typeof globalThis.fetch
+    return { fetch, calls }
+  }
+
+  function withSender(send: (phone: string, code: string) => Promise<void>) {
+    let db: DB = createSeed()
+    const ctx: Context = {
+      now: Date.now,
+      session: async () => null,
+      setSession: async () => undefined,
+      device: () => null,
+      setDevice: () => undefined,
+      hash: async (p) => p,
+      verify: async (p, s) => p === s,
+      preview: true,
+      simulator: false,
+      baseUrl: "",
+      messenger: { channels: { sms: true, email: false }, sms: async () => undefined, email: async () => undefined, code: send, codeChannel: "whatsapp" },
+    }
+    return createService(createMemoryStore({ load: () => db, save: (next) => (db = next) }), ctx)
+  }
+
+  it("sends LoyaLoop's own code with the authentication template and checks it locally", async () => {
+    const meta = fakeMeta()
+    const send = whatsappCodeSender({ token: "EAAG-prueba", phoneNumberId: "1234567890", template: "codigo_registro", language: "es_MX", fetch: meta.fetch })
+    const api = withSender(send)
+    const sent = await api.sendCode("AFF7Q2", person.phone, "new")
+    expect(sent).toMatchObject({ previewCode: "", channel: "whatsapp" })
+    expect(meta.calls[0].url).toBe("https://graph.facebook.com/v22.0/1234567890/messages")
+    expect(meta.calls[0].auth).toBe("Bearer EAAG-prueba")
+    const body = meta.calls[0].body
+    expect(body).toMatchObject({ messaging_product: "whatsapp", to: "525512349876", type: "template", template: { name: "codigo_registro", language: { code: "es_MX" } } })
+    const code = body.template.components[0].parameters[0].text
+    expect(code).toMatch(/^\d{6}$/)
+    expect(body.template.components[1]).toMatchObject({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] })
+    await expect(api.completeRegistration("AFF7Q2", person, code === "000000" ? "111111" : "000000")).rejects.toThrow(/no coincide/)
+    expect((await api.completeRegistration("AFF7Q2", person, code)).created).toBe(true)
+  })
+
+  it("explains a failed send without exposing Meta's error", async () => {
+    const meta = fakeMeta(400)
+    const api = withSender(whatsappCodeSender({ token: "x", phoneNumberId: "1", template: "t", language: "es_MX", fetch: meta.fetch }))
+    await expect(api.sendCode("AFF7Q2", person.phone, "new")).rejects.toThrow(/No pudimos enviar el código/)
   })
 })

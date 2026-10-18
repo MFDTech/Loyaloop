@@ -33,6 +33,11 @@ export interface Config {
   twilioAuthToken: string
   twilioVerifySid: string
   twilioVerifyChannel: "sms" | "whatsapp"
+  /** WhatsApp Cloud API (Meta) for registration codes: token, phone number id and approved template. */
+  whatsappToken: string
+  whatsappPhoneNumberId: string
+  whatsappTemplate: string
+  whatsappTemplateLanguage: string
 }
 
 const flag = (value: string | undefined, fallback = false) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(value.toLowerCase()))
@@ -66,5 +71,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     twilioAuthToken: env.TWILIO_AUTH_TOKEN || "",
     twilioVerifySid: env.TWILIO_VERIFY_SID || "",
     twilioVerifyChannel: env.TWILIO_VERIFY_CHANNEL === "whatsapp" ? "whatsapp" : "sms",
+    whatsappToken: env.WHATSAPP_TOKEN || "",
+    whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || "",
+    whatsappTemplate: env.WHATSAPP_TEMPLATE || "codigo_registro",
+    whatsappTemplateLanguage: env.WHATSAPP_TEMPLATE_LANGUAGE || "es_MX",
   }
 }

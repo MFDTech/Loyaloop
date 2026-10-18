@@ -100,7 +100,13 @@ export interface Messenger {
   email(message: EmailMessage): Promise<void>
   /** When set, registration codes go through it instead of sms(). */
   verifier?: PhoneVerifier
+  /** Sends a code created by LoyaLoop (WhatsApp authentication template). */
+  code?(phone: string, code: string): Promise<void>
+  /** How the code reaches the customer, shown on the registration page. */
+  codeChannel?: CodeChannel
 }
+
+export type CodeChannel = "sms" | "whatsapp"
 
 /** Links to save a customer's card in each wallet. Empty when the wallet is not configured. */
 export interface WalletLinks {
@@ -1199,7 +1205,7 @@ export function createService(store: Store, ctx: Context) {
     return { card: publicCard(db, business.id), branchName: business.discreet ? "" : branch.name }
   }
 
-  async function sendCode(code: string, phoneInput: string, mode: "new" | "recover"): Promise<{ previewCode: string; existing: boolean }> {
+  async function sendCode(code: string, phoneInput: string, mode: "new" | "recover"): Promise<{ previewCode: string; existing: boolean; channel: CodeChannel | "preview" }> {
     const { business } = await branchByCode(code)
     const phone = normalizePhone(String(phoneInput || ""))
     if (phone.length !== 10) throw new ApiError("Escribe un celular de 10 dígitos.")
@@ -1214,19 +1220,23 @@ export function createService(store: Store, ctx: Context) {
       return { sms, existing }
     })
     const name = business.discreet ? business.neutralName : business.name
-    const verifier = ctx.messenger.verifier
-    if (verifier) {
+    const { verifier, code: deliver, codeChannel = "sms" } = ctx.messenger
+    if (verifier || deliver) {
       try {
-        await verifier.start(phone)
+        if (verifier) await verifier.start(phone)
+        else await deliver!(phone, result.sms)
       } catch (error) {
-        console.error("[sms] no se pudo enviar el código", (error as Error).message)
+        console.error("[codigo] no se pudo enviar", (error as Error).message)
         throw new ApiError("No pudimos enviar el código. Revisa el número e inténtalo otra vez.", "unavailable")
       }
-      return { previewCode: "", existing: result.existing }
+      return { previewCode: "", existing: result.existing, channel: codeChannel }
     }
-    if (ctx.messenger.channels.sms) await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
-    else if (!ctx.preview) throw new ApiError("Por ahora no podemos enviar códigos. Inténtalo más tarde.", "unavailable")
-    return { previewCode: ctx.preview ? result.sms : "", existing: result.existing }
+    if (ctx.messenger.channels.sms) {
+      await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
+      return { previewCode: ctx.preview ? result.sms : "", existing: result.existing, channel: "sms" }
+    }
+    if (!ctx.preview) throw new ApiError("Por ahora no podemos enviar códigos. Inténtalo más tarde.", "unavailable")
+    return { previewCode: result.sms, existing: result.existing, channel: "preview" }
   }
 
   async function completeRegistration(code: string, input: RegistrationInput, sms: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {

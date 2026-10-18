@@ -1,6 +1,7 @@
 import type { EmailMessage, Messenger } from "../../src/lib/service"
 import type { Config } from "./config"
 import { twilioVerifier } from "./twilio"
+import { whatsappCodeSender } from "./whatsapp"
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -55,9 +56,16 @@ export function createMessenger(config: Config, http: typeof fetch = fetch): Mes
     config.twilioAccountSid && config.twilioAuthToken && config.twilioVerifySid
       ? twilioVerifier({ accountSid: config.twilioAccountSid, authToken: config.twilioAuthToken, serviceSid: config.twilioVerifySid, channel: config.twilioVerifyChannel, fetch: http })
       : undefined
+  // WhatsApp directly with Meta wins over Twilio when both are configured: it is cheaper.
+  const whatsapp =
+    config.whatsappToken && config.whatsappPhoneNumberId
+      ? whatsappCodeSender({ token: config.whatsappToken, phoneNumberId: config.whatsappPhoneNumberId, template: config.whatsappTemplate, language: config.whatsappTemplateLanguage, fetch: http })
+      : undefined
   return {
-    channels: { sms: !!verifier, email: !!email },
-    verifier,
+    channels: { sms: !!(verifier || whatsapp), email: !!email },
+    verifier: whatsapp ? undefined : verifier,
+    code: whatsapp,
+    codeChannel: whatsapp ? "whatsapp" : config.twilioVerifyChannel,
     async sms(phone, text) {
       console.log(`[sms] ${maskPhone(phone)}: ${text.replace(/\d{6}/, "******")}`)
     },

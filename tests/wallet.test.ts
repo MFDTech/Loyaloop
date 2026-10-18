@@ -82,6 +82,10 @@ const config: Config = {
   twilioAuthToken: "",
   twilioVerifySid: "",
   twilioVerifyChannel: "sms",
+  whatsappToken: "",
+  whatsappPhoneNumberId: "",
+  whatsappTemplate: "codigo_registro",
+  whatsappTemplateLanguage: "es_MX",
 }
 
 describe("Google Wallet pass building", () => {

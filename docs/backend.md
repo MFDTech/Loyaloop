@@ -57,7 +57,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 
 | Pieza | Qué se necesita | Dónde va |
 |---|---|---|
-| SMS del registro | **Programado** con Twilio Verify (`server/src/twilio.ts`). Falta: cuenta, servicio Verify y llaves, ver abajo | `.env` |
+| Código del registro | **Programado** por WhatsApp con Meta (`server/src/whatsapp.ts`) o por SMS con Twilio Verify (`server/src/twilio.ts`). Falta: cuentas y llaves, ver abajo | `.env` |
 | Correo (invitaciones, contraseñas) | **Programado** con Resend. Falta: verificar `loyaloop.com.mx` en Resend y poner `RESEND_API_KEY` | `.env` |
 | Apple Wallet | **Programado** (`server/src/wallet/apple.ts`). Falta: que Apple apruebe la cuenta de desarrollador y crear el certificado, ver abajo | `.env` y `secrets/` |
 | Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
@@ -144,3 +144,16 @@ Twilio crea el código de 6 dígitos, lo manda por SMS al `+52` del cliente y lo
 6. Prueba un registro con tu celular. Cuando también funcione el correo, cambia `PREVIEW=false`.
 
 WhatsApp: `TWILIO_VERIFY_CHANNEL=whatsapp`, solo después de conectar un remitente de WhatsApp en Twilio.
+
+## WhatsApp con Meta (códigos de registro)
+
+LoyaLoop crea el código de 6 dígitos y lo manda con una plantilla de **autenticación** aprobada por Meta, con botón «Copiar código». El código se revisa en LoyaLoop (10 minutos, 5 intentos, 30 s entre envíos). Si están configurados WhatsApp y Twilio, se usa WhatsApp.
+
+1. **Portafolio de negocio:** en [business.facebook.com](https://business.facebook.com) crea el portafolio de LoyaLoop. Más adelante, en *Centro de seguridad*, verifica el negocio (constancia de situación fiscal y comprobante de domicilio) para quitar el límite inicial de envíos.
+2. **App:** en [developers.facebook.com](https://developers.facebook.com) → *Mis apps* → *Crear app* → caso de uso **WhatsApp** (conectar con clientes) → elige el portafolio.
+3. **Número:** en WhatsApp → *Configuración de la API* agrega un número propio que **no** esté usando la app de WhatsApp (un chip nuevo sirve). Nombre visible: `LoyaLoop`. Agrega una tarjeta en *WhatsApp Manager → Configuración de pagos*. Copia el **Identificador del número de teléfono**.
+4. **Plantilla:** WhatsApp Manager → *Plantillas de mensajes* → *Crear* → categoría **Autenticación** → nombre `codigo_registro` → idioma **Español (MEX)** → entrega del código **Copiar código** → activa el aviso de seguridad y la vigencia de 10 minutos → enviar. Suele aprobarse en minutos.
+5. **Token permanente:** *Configuración del negocio* → *Usuarios del sistema* → *Agregar* (administrador) → *Asignar activos*: la app y la cuenta de WhatsApp → *Generar token* con permisos `whatsapp_business_messaging` y `whatsapp_business_management`, sin vencimiento.
+6. En el VPS pon `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID` en `.env` y reinicia. El registro debe decir `[codigo] WhatsApp de Meta activo`.
+
+Si el cliente no tiene WhatsApp, el mensaje no le llega. Para esos casos se puede sumar SMS de respaldo más adelante.

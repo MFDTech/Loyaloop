@@ -37,6 +37,7 @@ export default function Registration({ code }: { code: string }) {
   const [step, setStep] = useState<Step>("form")
   const [form, setForm] = useState({ name: "", phone: "", email: "", day: "", month: "", promotions: false, privacy: false })
   const [sms, setSms] = useState("")
+  const [channel, setChannel] = useState<api.CodeChannel | "preview">("sms")
   const [preview, setPreview] = useState("")
   const [existing, setExisting] = useState(false)
   const [cooldown, setCooldown] = useState(0)
@@ -96,6 +97,7 @@ export default function Registration({ code }: { code: string }) {
     if (!r.ok) return
     setMode(nextMode)
     setPreview(r.value.previewCode)
+    setChannel(r.value.channel)
     setExisting(r.value.existing)
     setSms("")
     setCooldown(30)
@@ -124,7 +126,7 @@ export default function Registration({ code }: { code: string }) {
                 </ul>
               </div>
               <Field label="Nombre" autoComplete="given-name" value={form.name} maxLength={60} onChange={(e) => set("name", e.target.value)} />
-              <Field label="Celular" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10 dígitos" value={form.phone} onChange={(e) => set("phone", e.target.value)} hint="Te enviamos un código por SMS para confirmar que es tuyo." />
+              <Field label="Celular" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10 dígitos" value={form.phone} onChange={(e) => set("phone", e.target.value)} hint="Te enviamos un código para confirmar que es tuyo." />
               <Field label="Correo" optional type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
               {!!card.program.birthdayBonus && (
                 <fieldset className="ll-fieldset">
@@ -211,13 +213,13 @@ export default function Registration({ code }: { code: string }) {
               <div>
                 <h2>Escribe el código</h2>
                 <p className="ll-reg-lead">
-                  Lo enviamos por SMS al {formatPhone(normalizePhone(form.phone))}.
+                  {channel === "whatsapp" ? "Lo enviamos por WhatsApp" : "Lo enviamos por SMS"} al {formatPhone(normalizePhone(form.phone))}.
                   {existing && mode === "new" && " Ya tienes una tarjeta con este celular: al confirmar te la mostramos."}
                 </p>
               </div>
               {preview && (
                 <Notice tone="info" title="Versión de prueba">
-                  Aún no se envían SMS. Tu código es <b className="ll-mono">{preview}</b>.
+                  Aún no se envían códigos. Tu código es <b className="ll-mono">{preview}</b>.
                 </Notice>
               )}
               <Field

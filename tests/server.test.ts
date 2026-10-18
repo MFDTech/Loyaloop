@@ -36,6 +36,10 @@ const config: Config = {
   twilioAuthToken: "",
   twilioVerifySid: "",
   twilioVerifyChannel: "sms",
+  whatsappToken: "",
+  whatsappPhoneNumberId: "",
+  whatsappTemplate: "codigo_registro",
+  whatsappTemplateLanguage: "es_MX",
 }
 
 describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
