@@ -492,7 +492,9 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-kiosk-subtitle { font-family: var(--font-heading); font-size: 20px; font-weight: 700; text-align: left; margin-top: 8px; }
 .ll-legal-head { max-width: 760px; margin: 0 auto; padding: 28px 20px 0; }
 .ll-legal ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
-.ll-nfc-sheet { display: grid; place-items: center; width: 96px; height: 96px; margin: 10px auto; border-radius: 50%; background: var(--brand-cream); color: var(--brand-terracotta); }
+/* .qr-sheet > span (landing) would turn it into a block and lose the centering. */
+.ll-nfc-sheet, .qr-sheet > .ll-nfc-sheet { display: grid; place-items: center; width: 96px; height: 96px; margin: 10px auto; border-radius: 50%; background: var(--brand-cream); color: var(--brand-terracotta); }
+.ll-nfc-sheet svg { display: block; transform: translateX(-2px); }
 .call-form-message.is-error { color: var(--ll-danger); background: var(--ll-danger-bg); }
 .product-checkbox > span > a { color: var(--brand-terracotta); text-decoration: underline; }
 .site-header nav .mobile-only-link { display: none; }
