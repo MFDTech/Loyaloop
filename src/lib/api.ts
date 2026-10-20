@@ -240,6 +240,7 @@ export const recoverCard = method("recoverCard")
 export const submitLead = method("submitLead")
 
 export const pairDevice = method("pairDevice")
+export const kioskUnpair = method("kioskUnpair")
 export const kiosk = method("kiosk")
 export const kioskScan = method("kioskScan")
 export const kioskScanStatus = method("kioskScanStatus")

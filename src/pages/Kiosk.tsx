@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import jsQR from "jsqr"
 import * as api from "../lib/api"
 import { useAsync, useOnline } from "../lib/hooks"
-import { href } from "../lib/router"
+import { href, navigate } from "../lib/router"
 import { int } from "../lib/util"
 import { Button, Confirm, Field, Icon, Loading, Notice, Symbol } from "../components/ui"
 
@@ -15,10 +15,14 @@ type View =
 
 const CAMERA_KEY = "loyaloop-kiosk-camera"
 
-export default function Kiosk() {
+export default function Kiosk({ code = "" }: { code?: string }) {
   const info = useAsync(() => (api.deviceToken() ? api.kiosk() : Promise.resolve(null)))
+  const [keep, setKeep] = useState(false)
+  const pairingCode = /^\d{6}$/.test(code) ? code : ""
   const unpaired = !api.deviceToken() || /vinculado/.test(info.error)
-  if (unpaired) return <Pairing />
+  if (unpaired) return <Pairing initialCode={pairingCode} />
+  // Opened with a new register's link on a device that is already a scanner.
+  if (pairingCode && !keep && info.data) return <SwitchRegister info={info.data} code={pairingCode} onKeep={() => (setKeep(true), navigate("/caja", { replace: true }))} />
   if (info.error)
     return (
       <div className="ll-kiosk">
@@ -40,8 +44,54 @@ export default function Kiosk() {
   return <Scanner info={info.data} />
 }
 
-function Pairing() {
-  const [code, setCode] = useState("")
+function SwitchRegister({ info, code, onKeep }: { info: api.KioskInfo; code: string; onKeep: () => void }) {
+  const [error, setError] = useState("")
+  const [pending, setPending] = useState(false)
+  return (
+    <div className="ll-kiosk">
+      <div className="ll-kiosk-stage">
+        <div className="ll-kiosk-panel" style={{ maxWidth: 560 }}>
+          <span className="ll-kiosk-icon">
+            <Icon name="link" size={46} />
+          </span>
+          <h1 style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>¿Cambiar este escáner de caja?</h1>
+          <p className="lead">
+            Ahora es el escáner de <b>{info.registerName}</b>
+            {info.branchName ? ` (${info.branchName})` : ""} de <b>{info.businessName}</b>. Si lo cambias, deja de funcionar para esa caja.
+          </p>
+          {error && <Notice tone="error">{error}</Notice>}
+          <div className="ll-stack" style={{ width: "100%" }}>
+            <Button
+              size="lg"
+              block
+              loading={pending}
+              onClick={async () => {
+                setError("")
+                setPending(true)
+                try {
+                  await api.pairDevice(code, "")
+                  navigate("/caja", { replace: true })
+                } catch (e) {
+                  setError((e as Error).message)
+                } finally {
+                  setPending(false)
+                }
+              }}
+            >
+              Vincular a la caja nueva
+            </Button>
+            <Button size="lg" block variant="secondary" onClick={onKeep}>
+              Seguir como {info.registerName}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Pairing({ initialCode = "" }: { initialCode?: string }) {
+  const [code, setCode] = useState(initialCode)
   const [name, setName] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
@@ -67,6 +117,7 @@ function Pairing() {
             setPending(true)
             try {
               await api.pairDevice(code, name)
+              if (initialCode) navigate("/caja", { replace: true })
             } catch (err) {
               setError((err as Error).message)
             } finally {
@@ -78,7 +129,11 @@ function Pairing() {
             <Icon name="link" size={46} />
           </span>
           <h1 style={{ fontSize: "clamp(30px, 4.4vw, 44px)" }}>Vincula este dispositivo a una caja</h1>
-          <p className="lead">En el panel, entra a «Sucursales y cajas», elige la caja y toca «Vincular escáner». Escribe aquí el código que aparece.</p>
+          <p className="lead">
+            {initialCode
+              ? "El código ya está escrito. Ponle un nombre si quieres y toca «Vincular»."
+              : "En el panel, entra a «Sucursales y cajas», elige la caja y toca «Vincular escáner». Escribe aquí el código que aparece."}
+          </p>
           <div className="ll-stack" style={{ width: "100%", textAlign: "left" }}>
             <Field label="Código de vinculación" className="ll-code-field" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
             <Field label="Nombre del dispositivo" optional placeholder="Ej. Tablet de recepción" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
@@ -409,7 +464,9 @@ function Scanner({ info }: { info: api.KioskInfo }) {
           confirmLabel="Desvincular"
           tone="danger"
           onClose={() => setLeaving(false)}
-          onConfirm={() => {
+          onConfirm={async () => {
+            // Also removed on the server, so the panel no longer lists it.
+            await api.kioskUnpair().catch(() => undefined)
             api.forgetDevice()
             setLeaving(false)
           }}

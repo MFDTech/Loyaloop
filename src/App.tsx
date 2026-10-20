@@ -42,7 +42,7 @@ function Router() {
     case "r":
       return <Registration code={second || ""} />
     case "caja":
-      return <Kiosk />
+      return <Kiosk code={second || ""} />
     case "legal":
       return <Legal />
     case "panel":

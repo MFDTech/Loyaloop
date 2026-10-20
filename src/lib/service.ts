@@ -285,6 +285,8 @@ export interface RegistrationInput {
 }
 
 export interface KioskInfo {
+  businessId: string
+  registerId: string
   businessName: string
   brand: Business["brand"]
   registerName: string
@@ -1340,10 +1342,22 @@ export function createService(store: Store, ctx: Context) {
 
   // ------------------------------------------------------------ kiosk
 
+  /** Removes this browser's previous scanner, whatever business it belonged to. */
+  async function dropOwnDevice() {
+    const token = ctx.device()
+    const old = token ? await store.deviceByToken(token) : undefined
+    if (old)
+      await store.write(B(old.businessId), (db) => {
+        db.devices = db.devices.filter((d) => d.id !== old.id)
+      })
+  }
+
   async function pairDevice(code: string, name: string): Promise<void> {
     const clean = String(code || "").replace(/\D/g, "")
     const found = clean.length === 6 ? await store.pairingCode(clean) : undefined
     if (!found) throw new ApiError("El código no es válido o ya venció. Genera uno nuevo desde el panel.", "invalid_code")
+    // One browser is one scanner: pairing again replaces the old link.
+    await dropOwnDevice()
     const token = `dev_${readableCode(40)}`
     await store.write(B(found.businessId), (db) => {
       db.pairingCodes = db.pairingCodes.filter((p) => new Date(p.expiresAt).getTime() > now())
@@ -1355,6 +1369,12 @@ export function createService(store: Store, ctx: Context) {
       db.pairingCodes = db.pairingCodes.filter((p) => p !== pairing)
     })
     ctx.setDevice(token)
+  }
+
+  /** «Desvincular» on the scanner itself: the panel stops listing it too. */
+  async function kioskUnpair(): Promise<void> {
+    await dropOwnDevice()
+    ctx.setDevice(null)
   }
 
   async function kioskDevice(): Promise<Device> {
@@ -1378,6 +1398,8 @@ export function createService(store: Store, ctx: Context) {
         if (dev) dev.lastSeenAt = iso()
       })
     return {
+      businessId: business.id,
+      registerId: register.id,
       businessName: business.discreet ? business.neutralName : business.name,
       brand: business.brand,
       registerName: register.name,
@@ -1510,6 +1532,7 @@ export function createService(store: Store, ctx: Context) {
     submitLead,
     // kiosk
     pairDevice,
+    kioskUnpair,
     kiosk,
     kioskScan,
     kioskScanStatus,
@@ -1529,7 +1552,7 @@ export const PUBLIC_METHODS = [
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
   "registration", "sendCode", "completeRegistration", "recoverCard", "submitLead",
-  "pairDevice", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
+  "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 
 export type PublicMethod = (typeof PUBLIC_METHODS)[number]

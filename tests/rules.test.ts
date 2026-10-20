@@ -263,6 +263,45 @@ for (const [label, make] of backends) {
     })
 
     describe("devices", () => {
+      it("accepts a card in every branch of its business and never in another business", async () => {
+        await as("dueno@laesquina.test")
+        const customer = (await api.customers()).find((c) => c.branchId === "br_esq_roma")!
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Roma")
+        expect((await api.kioskScan(customer.token)).status).toBe("visit")
+        // The same browser becomes the Condesa scanner: the card still works there.
+        await api.pairDevice((await api.createPairingCode("rg_esq_condesa")).code, "Condesa")
+        expect((await api.kiosk()).registerId).toBe("rg_esq_condesa")
+        advance(60 * 9)
+        expect((await api.kioskScan(customer.token)).status).toBe("visit")
+        // A card from Affair is rejected at La Esquina...
+        await expect(api.kioskScan((await affairCustomer(1)).token)).rejects.toThrow(/no corresponde/)
+        // ...and La Esquina's card is rejected at Affair.
+        useAffairTablet()
+        await expect(api.kioskScan(customer.token)).rejects.toThrow(/no corresponde/)
+      })
+
+      it("keeps one scanner per device: pairing again replaces it, unpairing removes it", async () => {
+        await as("dueno@laesquina.test")
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Tablet")
+        await api.pairDevice((await api.createPairingCode("rg_esq_condesa")).code, "Tablet")
+        const devices = (await api.bundle()).devices
+        expect(devices).toHaveLength(1)
+        expect(devices[0].registerId).toBe("rg_esq_condesa")
+        expect((await api.kiosk()).businessId).toBe("b_esquina")
+
+        // The Affair tablet moved to La Esquina: Affair no longer has it.
+        useAffairTablet()
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Tablet")
+        await as("dueno@affair.test")
+        expect((await api.bundle()).devices.some((d) => d.id === "dv_affair_1")).toBe(false)
+
+        // «Desvincular» on the scanner deletes it on the server too.
+        await api.kioskUnpair()
+        await expect(api.kiosk()).rejects.toThrow(/vinculado/)
+        await as("dueno@laesquina.test")
+        expect((await api.bundle()).devices.map((d) => d.registerId)).toEqual(["rg_esq_condesa"])
+      })
+
       it("stops a kiosk once it is unpaired", async () => {
         useAffairTablet()
         await api.kiosk()
