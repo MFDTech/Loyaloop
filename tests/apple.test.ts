@@ -125,7 +125,7 @@ describe("Apple Wallet pass building", () => {
     const manifest = JSON.parse(files["manifest.json"].toString())
     expect(Object.keys(manifest).sort()).toEqual(Object.keys(files).filter((f) => f !== "manifest.json" && f !== "signature").sort())
     for (const [name, hash] of Object.entries(manifest)) expect(createHash("sha1").update(files[name]).digest("hex")).toBe(hash)
-    expect(await sharp(files["strip@2x.png"]).metadata()).toMatchObject({ width: 750, height: 246 })
+    expect(await sharp(files["strip@2x.png"]).metadata()).toMatchObject({ width: 750, height: 288 })
     expect(await sharp(files["icon@3x.png"]).metadata()).toMatchObject({ width: 87, height: 87 })
   })
 
@@ -301,5 +301,30 @@ describe.skipIf(!TEST_DATABASE_URL)("Apple Wallet web service", () => {
     const off = createApp({ pool, store: createPgStore(pool), config, messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined }, wallets: createWallets(pool, null) })
     expect((await off.request("/api/apple/download/c1?t=x")).status).toBe(404)
     expect((await off.request(`${v1}/devices/d/registrations/${PASS_TYPE}`)).status).toBe(404)
+  })
+})
+
+describe("stamp strip drawing", () => {
+  it("keeps every stamp inside the strip with a margin, in one or two rows", async () => {
+    const { stampLayout } = await import("../src/lib/stampIcons")
+    for (const goal of [1, 4, 5, 6, 8, 10, 12, 20]) {
+      const { size, cells } = stampLayout(goal, 375, 144)
+      expect(cells).toHaveLength(goal)
+      for (const { cx, cy } of cells) {
+        expect(cx - size / 2).toBeGreaterThanOrEqual(375 * 0.05)
+        expect(cx + size / 2).toBeLessThanOrEqual(375 * 0.95)
+        expect(cy - size / 2).toBeGreaterThan(0)
+        expect(cy + size / 2).toBeLessThan(144)
+      }
+      expect(new Set(cells.map((c) => Math.round(c.cy))).size).toBe(goal <= 5 ? 1 : 2)
+    }
+  })
+
+  it("uses the logo only when there is one and the business is not discreet", async () => {
+    const { stampGlyph } = await import("../src/lib/stampIcons")
+    expect(stampGlyph("logo", true)).toBe("logo")
+    expect(stampGlyph("logo", false)).toBe("check")
+    expect(stampGlyph(undefined, true)).toBe("check")
+    expect(stampGlyph("heart", false)).toBe("heart")
   })
 })

@@ -234,7 +234,7 @@ function CardTab({ data }: { data: AdminBundle }) {
           <ProgramEditor value={program} onChange={setProgram} rewards={rewards} />
         </Card>
         <Card title="Marca y privacidad">
-          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} />
+          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} stamps={program.type === "stamps"} />
         </Card>
         <Card title="Recompensas" description="El dueño y el gerente las editan desde su panel.">
           {rewards.length ? (

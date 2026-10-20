@@ -1,8 +1,9 @@
+import { STAMP_ICON_OPTIONS } from "../../lib/stampIcons"
 import { useEffect, useState, type ChangeEvent } from "react"
 import type { PublicCard } from "../../lib/api"
 import type { Brand, CardType, Program, Tier } from "../../lib/types"
 import { cardTypeHelp, cardTypeLabel, inkFor, uid } from "../../lib/util"
-import { Button, Check, Field, Icon, IconButton, Notice, SelectField } from "../../components/ui"
+import { Button, Check, Field, Icon, IconButton, Notice, Segmented, SelectField } from "../../components/ui"
 
 export type ProgramDraft = Omit<Program, "businessId">
 
@@ -177,7 +178,7 @@ function readImage(e: ChangeEvent<HTMLInputElement>, done: (dataUrl: string) => 
   reader.readAsDataURL(file)
 }
 
-export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string }) {
+export function BrandEditor({ value, onChange, name, stamps = false }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string; stamps?: boolean }) {
   const [error, setError] = useState("")
   const setBrand = (patch: Partial<Brand>) => onChange({ ...value, brand: { ...value.brand, ...patch } })
   const contrast = inkFor(value.brand.color).contrast
@@ -230,6 +231,17 @@ export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onCh
         </div>
         <p className="ll-field-hint">Opcional. Proporción 3:1 (por ejemplo 1125 × 369 px). En tarjetas de sellos se dibujan los sellos encima.</p>
       </div>
+      {stamps && (
+        <div className="ll-field">
+          <span className="ll-label">Ícono de los sellos</span>
+          <Segmented label="Ícono de los sellos" value={value.brand.stampIcon || "check"} options={STAMP_ICON_OPTIONS} onChange={(stampIcon) => setBrand({ stampIcon })} />
+          <p className="ll-field-hint">
+            {value.brand.stampIcon === "logo" && (!value.brand.logo || value.discreet)
+              ? "Sin logo (o en modo discreto) los sellos llevan una palomita."
+              : "Se dibuja dentro de cada sello ganado. El último sello muestra un regalo."}
+          </p>
+        </div>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <Check
         label="Modo discreto"

@@ -13,6 +13,7 @@ import JSZip from "jszip"
 import sharp from "sharp"
 import { cardFrom } from "../../../src/lib/card"
 import { backFields } from "../../../src/lib/passText"
+import { STRIP, stampGlyph, stampStripSvg, type StampStyle } from "../../../src/lib/stampIcons"
 import { inkFor } from "../../../src/lib/util"
 import type { PassData } from "./google"
 
@@ -58,30 +59,9 @@ function imageFrom(dataUrl?: string): Buffer | null {
   return match ? Buffer.from(match[2], "base64") : null
 }
 
-const escapeXml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
 
-/** Stamp strip drawn on the server, like the preview in the app. */
-function stampsSvg(count: number, goal: number, color: string, ink: string, scale: number) {
-  const width = 375 * scale
-  const height = 123 * scale
-  const perRow = goal > 8 ? Math.ceil(goal / 2) : goal
-  const rows = Math.ceil(goal / perRow)
-  const gap = 10 * scale
-  const size = Math.min((width - gap * (perRow + 1)) / perRow, (height - gap * (rows + 1)) / rows)
-  const r = size / 2
-  const offsetX = (width - (perRow * size + (perRow - 1) * gap)) / 2
-  const offsetY = (height - (rows * size + (rows - 1) * gap)) / 2
-  let circles = ""
-  for (let i = 0; i < goal; i++) {
-    const cx = offsetX + (i % perRow) * (size + gap) + r
-    const cy = offsetY + Math.floor(i / perRow) * (size + gap) + r
-    const on = i < count
-    circles += `<circle cx="${cx}" cy="${cy}" r="${r - 2 * scale}" fill="${on ? ink : "none"}" stroke="${ink}" stroke-width="${2.5 * scale}" opacity="${on ? 1 : 0.75}"/>`
-    if (i === goal - 1 && !on)
-      circles += `<text x="${cx}" y="${cy + r * 0.32}" font-family="Helvetica, Arial, sans-serif" font-size="${r * 0.9}" font-weight="700" text-anchor="middle" fill="${ink}">★</text>`
-  }
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${escapeXml(color)}"/>${circles}</svg>`)
-}
+/** Stamp strip drawn on the server, the same drawing the app shows in its preview. */
+const stampsSvg = (count: number, goal: number, style: StampStyle, scale: number) => Buffer.from(stampStripSvg(count, goal, style, scale))
 
 export class AppleWallet {
   private readonly signer: { cert: forge.pki.Certificate; key: forge.pki.PrivateKey; wwdr: forge.pki.Certificate }
@@ -113,7 +93,7 @@ export class AppleWallet {
     const balance = stamps
       ? { key: "balance", label: "SELLOS", value: `${customer.stamps}/${program.stampGoal}`, ...(notify.pointsEarned ? { changeMessage: "Llevas %@ sellos" } : {}) }
       : { key: "balance", label: "PUNTOS", value: customer.points, ...(notify.pointsEarned ? { changeMessage: "Ahora tienes %@ puntos" } : {}) }
-    const secondary: object[] = [{ key: "member", label: "MIEMBRO", value: customer.name.split(" ")[0] || customer.name }]
+    const secondary: object[] = [{ key: "member", label: "NOMBRE", value: customer.name }]
     if (program.type === "tiers") secondary.push({ key: "tier", label: "NIVEL", value: tier?.name || program.tiers[0]?.name || "—", ...(notify.tierChange ? { changeMessage: "Subiste a nivel %@" } : {}) })
     if (earned || stamps) secondary.push({ key: "earned", label: "POR CANJEAR", value: earned, ...(notify.rewardAvailable ? { changeMessage: "Tienes %@ recompensas para canjear" } : {}) })
     const back = backFields(card).map((f, i) => ({ key: `info_${i}`, label: f.label, value: f.value }))
@@ -156,16 +136,21 @@ export class AppleWallet {
         files[name] = await sharp(logo).resize(160 * scale, 50 * scale, { fit: "inside" }).png().toBuffer()
     const stripImage = imageFrom(business.brand.strip)
     const { ink } = inkFor(business.brand.color)
+    const color = /^#[\da-f]{6}$/i.test(business.brand.color) ? business.brand.color : "#8A2E12"
+    const glyph = stampGlyph(business.brand.stampIcon, !!logo)
+    const logoUri = glyph === "logo" && logo ? `data:image/png;base64,${(await sharp(logo).resize(256, 256, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } }).png().toBuffer()).toString("base64")}` : undefined
     for (const [name, scale] of [["strip.png", 1], ["strip@2x.png", 2], ["strip@3x.png", 3]] as const) {
-      const width = 375 * scale
-      const height = 123 * scale
+      const width = STRIP.width * scale
+      const height = STRIP.height * scale
       if (program.type === "stamps" && customer) {
-        const base = sharp(stampsSvg(customer.stamps, program.stampGoal, business.brand.color, ink, scale))
         if (stripImage) {
-          const background = await sharp(stripImage).resize(width, height, { fit: "cover" }).modulate({ brightness: 0.55 }).png().toBuffer()
-          const overlay = stampsSvg(customer.stamps, program.stampGoal, "transparent", "#FFFFFF", scale)
+          // Darkened photo with white stamps on top.
+          const background = await sharp(stripImage).resize(width, height, { fit: "cover" }).modulate({ brightness: 0.5 }).png().toBuffer()
+          const overlay = stampsSvg(customer.stamps, program.stampGoal, { background: null, ink: "#FFFFFF", mark: color, glyph, logo: logoUri }, scale)
           files[name] = await sharp(background).composite([{ input: await sharp(overlay).png().toBuffer() }]).png().toBuffer()
-        } else files[name] = await base.png().toBuffer()
+        } else {
+          files[name] = await sharp(stampsSvg(customer.stamps, program.stampGoal, { background: color, ink, mark: color, glyph, logo: logoUri }, scale)).png().toBuffer()
+        }
       } else if (stripImage) files[name] = await sharp(stripImage).resize(width, height, { fit: "cover" }).png().toBuffer()
     }
     return files

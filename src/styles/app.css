@@ -294,8 +294,8 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-pass-strip { margin: 12px -14px; height: 124px; background-size: cover; background-position: center; background-color: rgba(255, 255, 255, .08); display: flex; align-items: center; padding: 10px 16px; }
 .ll-pass-primary { display: flex; flex-direction: column; font-size: 34px; font-weight: 300; line-height: 1.1; text-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .ll-pass-primary small { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-shadow: none; }
-.ll-pass-stamps { display: grid; gap: 8px; width: 100%; justify-items: center; }
-.ll-pass-stamps span { width: 30px; height: 30px; border-radius: 50%; border: 2px solid; display: grid; place-items: center; opacity: .95; }
+.ll-pass-strip.has-stamps { padding: 0; height: auto; aspect-ratio: 375 / 144; }
+.ll-pass-stamps { display: block; width: 100%; height: auto; }
 .ll-pass-fields { display: flex; justify-content: space-between; gap: 12px; padding: 0 2px; }
 .ll-pass-fields .ll-pass-field:last-child { text-align: right; align-items: flex-end; }
 .ll-pass-barcode { margin: 18px auto 0; background: #fff; border-radius: 10px; padding: 10px 10px 6px; width: max-content; display: grid; justify-items: center; gap: 4px; color: #191613; }

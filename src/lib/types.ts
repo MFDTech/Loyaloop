@@ -28,6 +28,8 @@ export interface Brand {
   color: string
   logo?: string
   strip?: string
+  /** Mark inside earned stamps (stamp cards). */
+  stampIcon?: import("./stampIcons").StampIcon
 }
 
 export interface Business {

@@ -226,7 +226,7 @@ export default function NewBusiness() {
               </>
             )}
 
-            {step === 3 && <BrandEditor value={brand} onChange={setBrand} name={info.name} />}
+            {step === 3 && <BrandEditor value={brand} onChange={setBrand} name={info.name} stamps={program.type === "stamps"} />}
 
             {step === 4 && (
               <>
