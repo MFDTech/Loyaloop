@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
-import { absoluteLink, href } from "../lib/router"
-import Qr from "../components/Qr"
+import { href, navigate } from "../lib/router"
 import RoiCalculator from "../components/RoiCalculator"
 import { Button, Icon, Logo, asset, type IconName } from "../components/ui"
 
@@ -51,6 +50,57 @@ function LoyaltyCard() {
         <span>Tu próximo café lo invitamos nosotros.</span>
         <span>5 / 8 sellos</span>
       </div>
+    </div>
+  )
+}
+
+const DEMO_KEY = "ll_demo_card"
+
+/** Saves a LoyaLoop demo card straight to the visitor's Wallet. */
+function DemoButtons() {
+  const [busy, setBusy] = useState<"" | "apple" | "google">("")
+  const [error, setError] = useState("")
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent
+  const android = /Android/.test(ua)
+  async function add(wallet: "apple" | "google") {
+    setBusy(wallet)
+    setError("")
+    try {
+      let token = ""
+      try {
+        token = localStorage.getItem(DEMO_KEY) || ""
+      } catch {
+        /* private mode */
+      }
+      const r = await api.demoCard(token)
+      try {
+        localStorage.setItem(DEMO_KEY, r.holder.token)
+      } catch {
+        /* private mode */
+      }
+      const url = r.links[wallet]
+      if (url) window.location.href = url
+      else navigate("/demo")
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy("")
+    }
+  }
+  const apple = (
+    <button key="apple" type="button" className="ll-wallet-btn" disabled={!!busy} onClick={() => add("apple")}>
+      <Icon name="wallet" size={22} /> {busy === "apple" ? "Preparando…" : "Agregar a Apple Wallet"}
+    </button>
+  )
+  const google = (
+    <button key="google" type="button" className="ll-wallet-btn is-google" disabled={!!busy} onClick={() => add("google")}>
+      <Icon name="wallet" size={22} /> {busy === "google" ? "Preparando…" : "Agregar a Google Wallet"}
+    </button>
+  )
+  return (
+    <div className="ll-demo-actions">
+      {android ? [google, apple] : [apple, google]}
+      {error && <p className="call-form-message is-error">{error}</p>}
     </div>
   )
 }
@@ -283,14 +333,11 @@ export default function Landing() {
             <span className="eyebrow">PRUÉBALA EN 20 SEGUNDOS</span>
             <h2>Llévate una tarjeta LoyaLoop en tu celular.</h2>
             <p>Un toque y queda en tu Wallet, igual que la de tus clientes. Luego simula una visita: verás el sello sumarse y el aviso llegar a tu pantalla.</p>
-            <a className="button ll-demo-mobile" href={href("/demo")}>
-              Agregar a mi Wallet <Icon name="arrow" size={16} />
+            <a className="ll-link ll-demo-more" href={href("/demo")}>
+              Ver la tarjeta y simular una visita
             </a>
           </div>
-          <div className="ll-demo-qr">
-            <Qr value={absoluteLink("/demo")} size={168} label="Código para guardar una tarjeta LoyaLoop en tu celular" />
-            <span>Escanéalo con la cámara de tu celular</span>
-          </div>
+          <DemoButtons />
         </section>
 
         <section id="how-it-works" className="how-section section container">

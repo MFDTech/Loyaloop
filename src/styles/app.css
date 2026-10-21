@@ -596,3 +596,7 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-demo-qr { display: grid; justify-items: center; gap: 10px; padding: 16px; border-radius: 16px; background: var(--brand-cream); }
 .ll-demo-qr span { font-size: 14px; color: var(--text-muted); }
 @media (max-width: 760px) { .ll-demo-section { grid-template-columns: 1fr; padding: 28px 22px; } .ll-demo-copy h2 { font-size: 27px; } .ll-demo-qr { display: none; } .ll-demo-mobile { display: inline-flex; } }
+.ll-demo-actions { display: grid; gap: 10px; width: 300px; }
+.ll-demo-actions .ll-wallet-btn:disabled { opacity: .7; cursor: default; }
+.ll-demo-more { display: inline-block; margin-top: 16px; }
+@media (max-width: 760px) { .ll-demo-actions { width: 100%; } }
