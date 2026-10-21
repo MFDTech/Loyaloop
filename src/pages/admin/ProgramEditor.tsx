@@ -65,12 +65,14 @@ export function NumberField({ label, value, onChange, hint, min = 0, step, suffi
 
 const TYPES: CardType[] = ["points", "stamps", "rewards", "tiers"]
 
-export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraft; onChange: (next: ProgramDraft) => void; rewards: { id: string; name: string }[] | null }) {
+export function ProgramEditor({ value, onChange, rewards, starter = false }: { value: ProgramDraft; onChange: (next: ProgramDraft) => void; rewards: { id: string; name: string }[] | null; starter?: boolean }) {
   const set = <K extends keyof ProgramDraft>(key: K, v: ProgramDraft[K]) => onChange({ ...value, [key]: v })
   const points = value.type !== "stamps"
   const setTier = (index: number, patch: Partial<Tier>) => set("tiers", value.tiers.map((t, i) => (i === index ? { ...t, ...patch } : t)))
   return (
     <div className="ll-stack">
+      {starter && <Notice tone="info">En el plan Starter la tarjeta es de sellos: un sello por visita. Puntos, niveles y conexión con tu terminal están en Pro.</Notice>}
+      {!starter && (
       <fieldset className="ll-fieldset">
         <legend>Tipo de tarjeta</legend>
         <div className="ll-type-grid">
@@ -88,6 +90,7 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
           ))}
         </div>
       </fieldset>
+      )}
 
       {points ? (
         <div className="ll-grid-3">
@@ -98,7 +101,7 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
       ) : (
         <div className="ll-grid-3">
           <NumberField label="Sellos para completar" value={value.stampGoal} min={2} onChange={(n) => set("stampGoal", Math.round(n))} />
-          <NumberField label="Compra mínima" value={value.stampMinPurchase} onChange={(n) => set("stampMinPurchase", n)} hint="En pesos, por sello. 0 = cualquier monto." />
+          {!starter && <NumberField label="Compra mínima" value={value.stampMinPurchase} onChange={(n) => set("stampMinPurchase", n)} hint="En pesos, por sello. 0 = cualquier monto." />}
           {rewards ? (
             <SelectField label="Recompensa al completar" value={value.stampRewardId || ""} onChange={(e) => set("stampRewardId", e.target.value || undefined)} hint={rewards.length ? undefined : "Primero crea una recompensa."}>
               <option value="">Elige una recompensa</option>
@@ -152,7 +155,7 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
         {NOTICE_EVENTS.filter((e) => e.applies(value.type)).map((e) => (
           <Check key={e.key} label={e.title} hint={e.when} checked={value.notify[e.key] ?? e.defaultOn} onChange={(v) => set("notify", { ...value.notify, [e.key]: v })} />
         ))}
-        <p className="ll-field-hint">El dueño también los enciende y cambia sus textos en «Avisos» de su panel.</p>
+        <p className="ll-field-hint">{starter ? "Sus textos se cambian en «Avisos»." : "El dueño también los enciende y cambia sus textos en «Avisos» de su panel."}</p>
       </fieldset>
     </div>
   )
@@ -180,7 +183,7 @@ function readImage(e: ChangeEvent<HTMLInputElement>, done: (dataUrl: string) => 
   reader.readAsDataURL(file)
 }
 
-export function BrandEditor({ value, onChange, name, stamps = false }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string; stamps?: boolean }) {
+export function BrandEditor({ value, onChange, name, stamps = false, starter = false }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string; stamps?: boolean; starter?: boolean }) {
   const [error, setError] = useState("")
   const setBrand = (patch: Partial<Brand>) => onChange({ ...value, brand: { ...value.brand, ...patch } })
   const contrast = inkFor(value.brand.color).contrast
@@ -252,13 +255,15 @@ export function BrandEditor({ value, onChange, name, stamps = false }: { value: 
         onChange={(discreet) => onChange({ ...value, discreet, locationAlerts: discreet ? false : value.locationAlerts })}
       />
       {value.discreet && <Field label="Nombre neutro" value={value.neutralName} maxLength={40} onChange={(e) => onChange({ ...value, neutralName: e.target.value })} hint="Así se verá en la Wallet del cliente." />}
+      {!starter && (
       <Check
         label="Pedir celular al registrarse"
         hint="Apagado: el cliente solo escribe su nombre (o un apodo) y su tarjeta sale al instante; el bono de bienvenida llega en su primera compra o visita. Encendido: confirma su celular con un código."
         checked={value.askPhone}
         onChange={(askPhone) => onChange({ ...value, askPhone })}
       />
-      <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />
+      )}
+      {!starter && <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />}
     </div>
   )
 }

@@ -49,6 +49,12 @@ export interface Business {
   locationAlerts: boolean
   /** LoyaLoop's public demo card: not a real business. */
   demo?: boolean
+  /** Starter: the owner sets it up alone (stamps, one branch). Pro (or unset): set up by LoyaLoop. */
+  plan?: "starter" | "pro"
+  /** Signed up from the website, not created by LoyaLoop. */
+  selfServe?: boolean
+  /** End of the free trial, for businesses that signed up alone. */
+  trialEndsAt?: string
   /** Who is responsible for the customers' data, as the privacy notice names it. */
   legalName?: string
   legalAddress?: string

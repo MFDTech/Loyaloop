@@ -600,3 +600,45 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-demo-actions .ll-wallet-btn:disabled { opacity: .7; cursor: default; }
 .ll-demo-more { display: inline-block; margin-top: 16px; }
 @media (max-width: 760px) { .ll-demo-actions { width: 100%; } }
+
+/* ---------- printable counter sign */
+.ll-poster-page { min-height: 100vh; background: var(--ll-bg); padding: 24px 16px 48px; display: grid; grid-template-columns: minmax(0, 15cm); justify-content: center; align-content: start; gap: 16px; }
+.ll-poster-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.ll-poster { width: 15cm; max-width: 100%; min-height: 21cm; background: #fff; border-radius: 12px; overflow: hidden; display: grid; justify-items: center; align-content: start; text-align: center; box-shadow: 0 10px 30px rgba(25, 22, 19, .1); color: var(--ll-ink); }
+.ll-poster header { width: 100%; background: var(--poster-color); color: var(--poster-ink); padding: 32px 24px 28px; display: grid; justify-items: center; gap: 8px; }
+.ll-poster header img { max-height: 64px; max-width: 60%; object-fit: contain; }
+.ll-poster h1 { font-family: var(--font-heading); font-size: 34px; line-height: 1.1; color: inherit; }
+.ll-poster header p { font-size: 16px; opacity: .85; }
+.ll-poster-qr { margin-top: 32px; padding: 14px; border-radius: 14px; border: 2px solid var(--poster-color); }
+.ll-poster h2 { font-family: var(--font-heading); font-size: 26px; margin-top: 22px; }
+.ll-poster ol { text-align: left; margin: 14px 0 0; padding-left: 22px; display: grid; gap: 6px; font-size: 16px; line-height: 1.4; max-width: 11cm; }
+.ll-poster-perk { margin-top: 18px; font-size: 17px; font-weight: 700; color: var(--poster-color); padding: 0 24px; }
+.ll-poster footer { margin: 22px 0 26px; font-size: 14px; color: var(--ll-ink-2); }
+@media print {
+  @page { size: 15cm 21cm; margin: 0; }
+  body { background: #fff; }
+  .ll-poster-page { padding: 0; background: #fff; }
+  .ll-poster-actions { display: none; }
+  .ll-poster { box-shadow: none; border-radius: 0; width: 15cm; height: 21cm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ---------- pricing: two plans + extras */
+.ll-plans { max-width: 880px; margin: 32px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: left; }
+.ll-plan { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; display: grid; gap: 14px; align-content: start; }
+.ll-plan.is-featured { border: 2px solid var(--brand-terracotta); }
+.ll-plan-tag { position: absolute; top: -12px; left: 24px; background: var(--brand-terracotta); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; }
+.ll-plan h3 { font-family: var(--font-heading); font-size: 26px; }
+.ll-plan-for { font-size: 15px; color: var(--text-muted); line-height: 1.5; min-height: 45px; }
+.ll-plan-price { display: flex; align-items: baseline; gap: 8px; }
+.ll-plan-price strong { font-family: var(--font-heading); font-size: 44px; letter-spacing: -.03em; line-height: 1; }
+.ll-plan-price span { font-size: 15px; color: var(--text-muted); }
+.ll-plan ul { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 10px; }
+.ll-plan li { display: flex; gap: 10px; font-size: 15px; line-height: 1.45; }
+.ll-plan li svg { color: var(--brand-terracotta); flex-shrink: 0; margin-top: 2px; }
+.ll-plan small { font-size: 14px; color: var(--text-muted); line-height: 1.45; }
+.ll-plan-extras { max-width: 880px; margin: 20px auto 0; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 24px 28px; }
+.ll-plan-extras h3 { font-family: var(--font-heading); font-size: 19px; }
+.ll-plan-extras dl { margin: 12px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; }
+.ll-plan-extras dt { font-weight: 700; font-size: 15px; }
+.ll-plan-extras dd { margin: 2px 0 0; font-size: 15px; color: var(--text-muted); }
+@media (max-width: 760px) { .ll-plans, .ll-plan-extras dl { grid-template-columns: 1fr; } .ll-plan-for { min-height: 0; } }

@@ -144,6 +144,28 @@ function DataTab({ data }: { data: AdminBundle }) {
         </Card>
       </div>
       <div className="ll-stack">
+        <Card title="Plan">
+          <div className="ll-stack">
+            <p className="ll-hint">
+              {business.plan === "starter"
+                ? `Starter ($390 al mes): una sucursal, tarjeta de sellos que el dueño edita solo.${business.trialEndsAt && business.status === "trial" ? ` La prueba termina el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}.` : ""}`
+                : "Pro ($990 al mes): terminal conectada, todos los tipos de tarjeta y sucursales adicionales."}
+            </p>
+            <div className="ll-row">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={save.pending}
+                onClick={async () => {
+                  const r = await save.run(business.id, { plan: business.plan === "starter" ? "pro" : "starter" })
+                  if (r.ok) toast(business.plan === "starter" ? "Ahora está en Pro." : "Ahora está en Starter.")
+                }}
+              >
+                {business.plan === "starter" ? "Cambiar a Pro" : "Cambiar a Starter"}
+              </Button>
+            </div>
+          </div>
+        </Card>
         <Card title="Estado de la cuenta">
           <div className="ll-stack">
             <p className="ll-hint">

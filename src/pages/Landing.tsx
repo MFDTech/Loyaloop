@@ -112,12 +112,33 @@ const CARD_TYPES: [IconName, string, string][] = [
   ["layers", "Niveles", "Clientes que suben de nivel con su gasto del año y ganan más puntos."],
 ]
 
+const STARTER_FEATURES = [
+  "Tarjeta de sellos con tu logo y tus colores",
+  "Apple Wallet y Google Wallet",
+  "Registro con QR o etiqueta NFC",
+  "Un sello por visita escaneando en la caja",
+  "Avisos y promociones al celular",
+  "Modo discreto",
+  "1 sucursal",
+]
+
+const PRO_FEATURES = [
+  "Todo lo de Starter",
+  "Puntos automáticos desde tu terminal (Mercado Pago, Clip)",
+  "Sellos, puntos, recompensas y niveles",
+  "Protección contra abusos en caja",
+  "Etiqueta NFC y escáner para cada caja",
+  "Te ayudamos a configurarla",
+]
+
 const FAQ: [string, string][] = [
   ["¿Mis clientes tienen que descargar una app?", "No. Tocan la etiqueta NFC de tu mostrador (o escanean su QR), escriben su nombre y guardan la tarjeta en Apple Wallet o Google Wallet. No piden su celular."],
   ["¿El cajero tiene que capturar algo?", "No. El cliente muestra el QR de su tarjeta y paga como siempre. LoyaLoop recibe el cobro de tu terminal y suma los puntos solo, sin que nadie escriba montos."],
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
-  ["¿Funciona con varias sucursales?", "Sí. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Se cobra por sucursal."],
+  ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
+  ["¿Qué pasa al terminar los 14 días gratis?", "En tu panel ves cuántos días te quedan. Si quieres seguir, pagas $390 al mes y todo sigue igual. Si no, tu tarjeta deja de aceptar clientes nuevos hasta que actives el plan."],
+  ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita. En Pro conectamos tu terminal de cobro y los puntos se suman solos según lo que pagan, sin que el cajero haga nada."],
 ]
 
 export default function Landing() {
@@ -531,7 +552,7 @@ export default function Landing() {
             ¿Cuánto vale que <em>vuelvan una vez más?</em>
           </h2>
           <p className="ll-calc-lead">Mueve los números de tu negocio y ve cuánto suman unas pocas visitas extra al mes.</p>
-          <RoiCalculator onCall={agenda} />
+          <RoiCalculator onCall={agenda} onStart={() => navigate("/empezar")} />
         </section>
 
         <section id="pricing" className="section container pricing-section">
@@ -541,30 +562,70 @@ export default function Landing() {
             <br />
             <em>Relaciones duraderas.</em>
           </h2>
-          <p>Un solo plan. Pagas por cada sucursal activa, cada mes.</p>
-          <div className="ll-price-single">
-            <div>
-              <h3>Por sucursal</h3>
-              <p>Te damos el precio en la llamada según tu número de sucursales. Sin costo por cliente y sin permanencia forzosa.</p>
-              <Button onClick={agenda} className="mt-5">
+          <p>Clientes ilimitados en los dos planes. Sin costo por cliente y sin permanencia forzosa.</p>
+          <div className="ll-plans">
+            <article className="ll-plan">
+              <h3>Starter</h3>
+              <p className="ll-plan-for">Para empezar hoy y configurarla tú mismo.</p>
+              <div className="ll-plan-price">
+                <strong>$390</strong>
+                <span>MXN al mes</span>
+              </div>
+              <ul>
+                {STARTER_FEATURES.map((f) => (
+                  <li key={f}>
+                    <Icon name="check" size={18} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Button onClick={() => navigate("/empezar")}>
+                Empieza gratis 14 días <Icon name="arrow" size={16} />
+              </Button>
+              <small>Sin tarjeta de crédito.</small>
+            </article>
+            <article className="ll-plan is-featured">
+              <span className="ll-plan-tag">PUNTOS AUTOMÁTICOS</span>
+              <h3>Pro</h3>
+              <p className="ll-plan-for">Para negocios que cobran con terminal y quieren que todo se sume solo.</p>
+              <div className="ll-plan-price">
+                <strong>$990</strong>
+                <span>MXN al mes</span>
+              </div>
+              <ul>
+                {PRO_FEATURES.map((f) => (
+                  <li key={f}>
+                    <Icon name="check" size={18} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Button onClick={agenda}>
                 Agenda una llamada <Icon name="arrow" size={16} />
               </Button>
-            </div>
-            <ul>
-              {[
-                "Tarjeta con tu marca en Apple Wallet y Google Wallet",
-                "Clientes ilimitados",
-                "Etiqueta NFC y escáner para cada caja",
-                "Conexión con tu terminal de cobro",
-                "Panel para dueño, gerentes y cajeros",
-                "Configuración y soporte de LoyaLoop",
-              ].map((f) => (
-                <li key={f}>
-                  <Icon name="check" size={18} />
-                  {f}
-                </li>
-              ))}
-            </ul>
+              <small>Garantía: si el primer mes no te convence, te devolvemos la mensualidad.</small>
+            </article>
+          </div>
+          <div className="ll-plan-extras">
+            <h3>Servicios opcionales</h3>
+            <dl>
+              <div>
+                <dt>Sucursal adicional</dt>
+                <dd>$250 al mes cada una</dd>
+              </div>
+              <div>
+                <dt>Instalación llave en mano</dt>
+                <dd>$1,500 una vez · gratis con pago anual</dd>
+              </div>
+              <div>
+                <dt>Gestión mensual</dt>
+                <dd>$990 al mes: promociones, avisos y reporte</dd>
+              </div>
+              <div>
+                <dt>Pago anual</dt>
+                <dd>12 meses al precio de 10</dd>
+              </div>
+            </dl>
           </div>
         </section>
 
@@ -624,7 +685,7 @@ export default function Landing() {
               </li>
               <li>
                 <Icon name="check" size={17} />
-                Precio para tu número de sucursales
+                El plan que le conviene a tu negocio
               </li>
               <li>
                 <Icon name="check" size={17} />

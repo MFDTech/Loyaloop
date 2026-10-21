@@ -307,6 +307,9 @@ function TagModal({ branch, onClose }: { branch: Branch; onClose: () => void }) 
             Imprime también este QR junto a la etiqueta, para los celulares sin NFC.
           </p>
         </div>
+        <a className="ll-link" href={`#/letrero/${branch.code}`} target="_blank" rel="noreferrer">
+          Imprimir letrero con QR para el mostrador
+        </a>
         <a className="ll-link" href={`#/r/${branch.code}`} target="_blank" rel="noreferrer">
           Abrir el registro de esta sucursal
         </a>

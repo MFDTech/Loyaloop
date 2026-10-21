@@ -2,11 +2,12 @@ import { useEffect } from "react"
 import { ToastProvider, Loading } from "./components/ui"
 import { navigate, useRoute } from "./lib/router"
 import Landing from "./pages/Landing"
-import { AcceptInvite, Login, RecoverPassword, ResetPassword } from "./pages/Auth"
+import { AcceptInvite, Login, RecoverPassword, ResetPassword, Signup } from "./pages/Auth"
 import BusinessApp from "./pages/BusinessApp"
 import AdminApp from "./pages/AdminApp"
 import Registration from "./pages/Registration"
 import DemoCard from "./pages/DemoCard"
+import Poster from "./pages/Poster"
 import Kiosk from "./pages/Kiosk"
 import Legal from "./pages/Legal"
 import NotFound from "./pages/NotFound"
@@ -32,6 +33,8 @@ function Router() {
   switch (first) {
     case undefined:
       return <Landing />
+    case "empezar":
+      return <Signup />
     case "login":
       return <Login next={route.query.get("next") || ""} />
     case "recuperar":
@@ -40,6 +43,8 @@ function Router() {
       return <ResetPassword token={second || ""} />
     case "invitacion":
       return <AcceptInvite token={second || ""} />
+    case "letrero":
+      return <Poster code={second || ""} />
     case "demo":
       return <DemoCard />
     case "r":

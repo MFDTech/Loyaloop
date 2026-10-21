@@ -3,7 +3,8 @@ import * as api from "../lib/api"
 import { useAsync } from "../lib/hooks"
 import { navigate, type Route } from "../lib/router"
 import Shell, { type NavItem } from "../components/Shell"
-import { ErrorState, Loading } from "../components/ui"
+import { ErrorState, Loading, Notice } from "../components/ui"
+import { DAY } from "../lib/util"
 import Overview from "./business/Overview"
 import Customers from "./business/Customers"
 import CustomerDetail from "./business/CustomerDetail"
@@ -107,7 +108,23 @@ export default function BusinessApp({ route }: { route: Route }) {
         icon: "store",
       }}
     >
+      {me.role !== "cashier" && <TrialBanner business={me.business} />}
       {page}
     </Shell>
+  )
+}
+
+/** Self-serve trial: days left, and how to keep the card once it ends. */
+function TrialBanner({ business }: { business?: api.Me["business"] }) {
+  if (!business?.selfServe || business.status !== "trial" || !business.trialEndsAt) return null
+  const left = Math.ceil((new Date(business.trialEndsAt).getTime() - Date.now()) / DAY)
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Prueba gratis: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu prueba gratis terminó"}>
+        {left > 0
+          ? "Para seguir con el plan Starter ($390 al mes) escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago."
+          : "Tu tarjeta deja de aceptar clientes nuevos 3 días después de que termina la prueba. Escríbenos a hola@loyaloop.com.mx para activarla ($390 al mes)."}
+      </Notice>
+    </div>
   )
 }

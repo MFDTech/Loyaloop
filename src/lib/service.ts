@@ -382,6 +382,10 @@ export function validateProgram(p: Omit<Program, "businessId">) {
   }
 }
 
+/** Free days for businesses that sign up alone, and days the card keeps working after that. */
+export const TRIAL_DAYS = 14
+export const TRIAL_GRACE_DAYS = 3
+
 const text = (value: unknown, max = 500) => (typeof value === "string" ? value.trim().slice(0, max) : "")
 
 // ---------------------------------------------------------------- service
@@ -759,6 +763,8 @@ export function createService(store: Store, ctx: Context) {
         audit(db, a, a.businessId, "Editó una sucursal", branch.name, now())
         return branch
       }
+      if (db.businesses.find((b) => b.id === a.businessId)?.plan === "starter" && db.branches.some((b) => b.businessId === a.businessId))
+        throw new ApiError("El plan Starter incluye 1 sucursal. Para agregar más (+$250 al mes cada una) escríbenos a hola@loyaloop.com.mx.", "plan_limit")
       const branch: Branch = { id: uid("br_"), businessId: a.businessId, name, address: text(input.address, 200), code: readableCode(6), createdAt: iso() }
       db.branches.push(branch)
       db.registers.push({ id: uid("rg_"), businessId: a.businessId, branchId: branch.id, name: "Caja 1" })
@@ -1209,12 +1215,13 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail">>) {
+  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail" | "plan">>) {
     const a = await asAdmin()
-    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone", "legalName", "legalAddress", "privacyEmail"] as const
+    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone", "legalName", "legalAddress", "privacyEmail", "plan"] as const
     const patch: Record<string, unknown> = {}
     for (const key of allowed) if (input[key] !== undefined) patch[key] = input[key]
     if (patch.askPhone !== undefined) patch.askPhone = !!patch.askPhone
+    if (patch.plan !== undefined && !["starter", "pro"].includes(String(patch.plan))) throw new ApiError("Plan no válido.")
     if (patch.legalName !== undefined) patch.legalName = text(patch.legalName, 160)
     if (patch.legalAddress !== undefined) patch.legalAddress = text(patch.legalAddress, 300)
     if (patch.privacyEmail !== undefined) {
@@ -1351,6 +1358,83 @@ export function createService(store: Store, ctx: Context) {
     }
   }
 
+  /** A self-serve trial that ended more than TRIAL_GRACE_DAYS ago without being activated. */
+  function trialOver(business: Business) {
+    return !!business.selfServe && business.status === "trial" && !!business.trialEndsAt && new Date(business.trialEndsAt).getTime() + TRIAL_GRACE_DAYS * DAY < now()
+  }
+
+  /** Website sign-up for the Starter plan: the owner gets a working card and a 14-day trial. */
+  async function signupBusiness(input: { ownerName: string; businessName: string; sector: string; email: string; password: string; phone?: string; branchAddress?: string; terms: boolean }): Promise<Me> {
+    const ownerName = text(input?.ownerName, 80)
+    const name = text(input?.businessName, 60)
+    const email = text(input?.email, 200).toLowerCase()
+    const password = String(input?.password || "")
+    if (!ownerName) throw new ApiError("Escribe tu nombre.")
+    if (!name) throw new ApiError("Escribe el nombre de tu negocio.")
+    if (!isEmail(email)) throw new ApiError("Escribe un correo válido.")
+    if (password.length < 8) throw new ApiError("La contraseña necesita al menos 8 caracteres.")
+    if (!input.terms) throw new ApiError("Para crear tu cuenta necesitas aceptar los términos y el aviso de privacidad.")
+    if (await store.emailTaken(email)) throw new ApiError("Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.", "email_taken")
+    const id = uid("b_")
+    const userId = uid("u_")
+    const hashed = await ctx.hash(password)
+    const created = iso()
+    const trialEndsAt = iso(now() + TRIAL_DAYS * DAY)
+    await store.write(B(id), (db) => {
+      db.businesses.push({ id, name, sector: text(input.sector, 60) || "Otro", contactName: ownerName, email, phone: normalizePhone(input.phone || ""), status: "trial", plan: "starter", selfServe: true, trialEndsAt, brand: { color: "#8A2E12", stampIcon: "check" }, discreet: false, neutralName: "Mi tarjeta de beneficios", locationAlerts: false, askPhone: false, createdAt: created })
+      const branchId = uid("br_")
+      db.branches.push({ id: branchId, businessId: id, name: "Sucursal principal", address: text(input.branchAddress, 200), code: readableCode(6), createdAt: created })
+      db.registers.push({ id: uid("rg_"), businessId: id, branchId, name: "Caja 1" })
+      const rewardId = uid("rw_")
+      db.rewards.push({ id: rewardId, businessId: id, name: "Producto de regalo", description: "Cámbialo por la recompensa que quieras dar.", cost: 0, active: true, createdAt: created })
+      db.programs.push({ ...defaultProgram(id), type: "stamps", stampGoal: 8, stampRewardId: rewardId, expirationMonths: 0, dailyLimit: 1, notify: { stampEarned: true, almostThere: true, rewardAvailable: true } })
+      for (const provider of ["mercadopago", "clip"] as Provider[]) db.integrations.push({ businessId: id, provider, status: "not_connected" })
+      db.users.push({ id: userId, name: ownerName, email, password: hashed, role: "owner", businessId: id, excludedFromEarning: false, active: true, createdAt: created })
+      audit(db, { user: db.users.find((u) => u.id === userId)!, businessId: id, role: "owner", impersonated: false }, id, "Creó su cuenta desde la página", `Plan Starter, prueba de ${TRIAL_DAYS} días`, now())
+    })
+    await ctx.setSession({ userId, createdAt: iso() })
+    await sendEmail({
+      to: email,
+      subject: "Tu tarjeta de lealtad ya está lista",
+      heading: `Bienvenido a LoyaLoop, ${ownerName.split(" ")[0]}`,
+      paragraphs: [
+        `Creamos la tarjeta de sellos de ${name}. Tienes ${TRIAL_DAYS} días gratis para probarla con tus clientes.`,
+        "En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.",
+      ],
+      action: { label: "Entrar a mi panel", url: link("#/panel") },
+    })
+    const admins = (await store.read("global")).users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
+    for (const to of admins)
+      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, `Prueba hasta: ${trialEndsAt.slice(0, 10)}`], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
+    return (await me())!
+  }
+
+  /** Starter owners design their own card: stamps only, no minimum purchase. */
+  async function saveCard(input: { program: Omit<Program, "businessId">; brand: Pick<Business, "brand" | "discreet" | "neutralName"> }) {
+    const a = await inBusiness(["owner"])
+    const business = await store.business(a.businessId)
+    if (business?.plan !== "starter") throw new ApiError("Las reglas de tu tarjeta las configura LoyaLoop. Escríbenos para cambiarlas.", "forbidden")
+    const program = { ...input.program, type: "stamps" as const, stampMinPurchase: 0, tiers: [] }
+    validateProgram(program)
+    const color = String(input.brand?.brand?.color || "")
+    if (!/^#[\da-f]{6}$/i.test(color)) throw new ApiError("Elige un color válido para tu tarjeta.")
+    const discreet = !!input.brand.discreet
+    const neutralName = text(input.brand.neutralName, 40)
+    if (discreet && !neutralName) throw new ApiError("Escribe el nombre neutro para el modo discreto.")
+    await store.write(B(a.businessId), (db) => {
+      if (program.stampRewardId && !db.rewards.some((r) => r.id === program.stampRewardId && r.businessId === a.businessId)) throw new ApiError("Elige una de tus recompensas.")
+      const b = db.businesses.find((x) => x.id === a.businessId)!
+      b.brand = { color, logo: input.brand.brand.logo, strip: input.brand.brand.strip, stampIcon: input.brand.brand.stampIcon }
+      b.discreet = discreet
+      b.neutralName = neutralName || b.neutralName
+      if (discreet) b.locationAlerts = false
+      const index = db.programs.findIndex((p) => p.businessId === a.businessId)
+      const current = db.programs[index]
+      db.programs[index] = { messages: current?.messages, missYouDays: current?.missYouDays, ...program, businessId: a.businessId }
+      audit(db, a, a.businessId, "Actualizó el diseño y las reglas de su tarjeta", "", now())
+    })
+  }
+
   /** The public demo card's business, created the first time anyone needs it. */
   async function ensureDemo() {
     const parts = demoBusiness(iso())
@@ -1397,7 +1481,7 @@ export function createService(store: Store, ctx: Context) {
     const branch = typeof code === "string" && /^[A-Z0-9]{4,12}$/i.test(code) ? await store.branchByCode(code) : undefined
     if (!branch) throw new ApiError("Este enlace no corresponde a ninguna sucursal.", "not_found")
     const business = await store.business(branch.businessId)
-    if (!business || business.status === "paused") throw new ApiError("Este programa no está disponible por ahora.", "paused")
+    if (!business || business.status === "paused" || trialOver(business)) throw new ApiError("Este programa no está disponible por ahora.", "paused")
     return { branch, business }
   }
 
@@ -1708,6 +1792,7 @@ export function createService(store: Store, ctx: Context) {
     if (!device) throw new ApiError("Este escáner ya no está vinculado.", "unpaired")
     const business = await store.business(device.businessId)
     if (!business || business.status === "paused") throw new ApiError("La cuenta del negocio está pausada.", "paused")
+    if (trialOver(business)) throw new ApiError("Terminó la prueba gratis. Activa tu plan para seguir sumando visitas.", "paused")
     return device
   }
 
@@ -1861,6 +1946,8 @@ export function createService(store: Store, ctx: Context) {
     completeRegistration,
     recoverCard,
     privacyNotice,
+    signupBusiness,
+    saveCard,
     demoCard,
     demoVisit,
     createCard,
@@ -1888,7 +1975,7 @@ export const PUBLIC_METHODS = [
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
-  "registration", "privacyNotice", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
+  "registration", "privacyNotice", "signupBusiness", "saveCard", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 

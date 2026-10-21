@@ -269,6 +269,52 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("Starter sign-up", () => {
+      const signup = { ownerName: "Ana López", businessName: "Panadería Sol", sector: "Café o restaurante", email: "ana@sol.test", password: "segura123", terms: true }
+
+      it("creates a stamps card on a 14-day trial that takes customers right away", async () => {
+        await api.logout()
+        const me = await api.signupBusiness(signup)
+        expect(me.role).toBe("owner")
+        expect(me.business).toMatchObject({ plan: "starter", status: "trial", selfServe: true })
+        const bundle = await api.bundle()
+        expect(bundle.program).toMatchObject({ type: "stamps", stampGoal: 8 })
+        const reg = await api.registration(bundle.branches[0].code)
+        expect(reg.card.businessName).toBe("Panadería Sol")
+        await api.logout()
+        await expect(api.signupBusiness(signup)).rejects.toThrow(/Ya existe/)
+        await expect(api.signupBusiness({ ...signup, email: "otra@sol.test", terms: false })).rejects.toThrow(/términos/)
+      })
+
+      it("lets the owner design the card but keeps it to stamps and one branch", async () => {
+        await api.logout()
+        await api.signupBusiness(signup)
+        const { program, business } = await api.bundle()
+        await api.saveCard({ program: { ...program, type: "points", stampGoal: 6, stampMinPurchase: 300 }, brand: { brand: { ...business.brand, color: "#1F6F5C" }, discreet: false, neutralName: "" } })
+        const after = await api.bundle()
+        expect(after.program).toMatchObject({ type: "stamps", stampGoal: 6, stampMinPurchase: 0 })
+        expect(after.business.brand.color).toBe("#1F6F5C")
+        await expect(api.saveBranch({ name: "Centro", address: "" })).rejects.toThrow(/1 sucursal/)
+        // A business set up by LoyaLoop keeps its rules in our hands.
+        await as("dueno@affair.test")
+        const affair = await api.bundle()
+        await expect(api.saveCard({ program: affair.program, brand: { brand: affair.business.brand, discreet: false, neutralName: "" } })).rejects.toThrow(/LoyaLoop/)
+      })
+
+      it("closes registration a few days after the trial ends, until LoyaLoop activates it", async () => {
+        await api.logout()
+        const me = await api.signupBusiness(signup)
+        const code = (await api.bundle()).branches[0].code
+        advance(60 * 24 * 16)
+        expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+        advance(60 * 24 * 2)
+        await expect(api.registration(code)).rejects.toThrow(/no está disponible/)
+        await admin()
+        await api.adminUpdateBusiness(me.business!.id, { status: "active" })
+        expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+      })
+    })
+
     describe("registration", () => {
       it("names the business as responsible in its card's privacy notice", async () => {
         const before = await api.privacyNotice("AFF7Q2")

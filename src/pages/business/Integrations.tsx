@@ -16,7 +16,12 @@ export default function Integrations() {
   return (
     <>
       <PageHeader title="Integraciones" description="Con tu sistema de cobro conectado, los puntos se suman solos al pagar. El cajero no captura montos." />
-      {!connected && (
+      {b.data.business.plan === "starter" && (
+        <Notice tone="info" title="Disponible en el plan Pro">
+          En Starter tu tarjeta suma un sello cada vez que el cliente escanea su QR en la caja. Con Pro ($990 al mes) se conecta a tu terminal y los puntos se suman solos según lo que pagan. Escríbenos a hola@loyaloop.com.mx para cambiarte.
+        </Notice>
+      )}
+      {b.data.business.plan !== "starter" && !connected && (
         <Notice tone={b.data.program.type === "stamps" ? "info" : "warning"} title="Tu sistema de cobro aún no está conectado">
           {b.data.program.type === "stamps"
             ? "Mientras tanto, tu tarjeta suma un sello por visita cada vez que el cliente escanea su QR."
@@ -49,7 +54,7 @@ export default function Integrations() {
           <Badge>Próximamente</Badge>
         </Card>
       </div>
-      <p className="ll-hint">¿Usas otro sistema de cobro? Escríbenos a hola@loyaloop.mx.</p>
+      <p className="ll-hint">¿Usas otro sistema de cobro? Escríbenos a hola@loyaloop.com.mx.</p>
     </>
   )
 }

@@ -287,6 +287,11 @@ function LoyaloopNotice() {
             las solicitudes de sus clientes; nosotros le ayudamos.
           </li>
           <li>
+            <b>Prueba gratis.</b> El plan Starter incluye 14 días gratis sin dar una tarjeta de crédito. Si al terminar no se activa el pago, la tarjeta deja de
+            registrar clientes nuevos y de sumar visitas; el negocio puede activarla después y conserva su configuración. Si no se activa, aplicamos lo previsto
+            en «Al terminar» contando desde el fin de la prueba.
+          </li>
+          <li>
             <b>Precio y pago.</b> Se paga por adelantado, cada mes o cada año según el plan; los impuestos que en su caso apliquen se suman al precio. Si un pago se atrasa más de 15 días,
             avisamos y podemos suspender el servicio hasta que se regularice. Los cambios de precio se avisan con 30 días de anticipación.
           </li>
