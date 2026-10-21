@@ -7,7 +7,7 @@ export const LOYALOOP_LEGAL = {
   /** Legal name (persona física o moral) that operates LoyaLoop. */
   name: "Miguel Farah Dagdug",
   /** Address for notices (domicilio). */
-  address: "Retorno 6 del Tepozteco 100, casa 2",
+  address: "Retorno 6 del Tepozteco 100, casa 2, Col. Colinas del Bosque, C.P. 14608, Alcaldía Tlalpan, Ciudad de México",
   /** Inbox for privacy requests (derechos ARCO). */
   email: "privacidad@loyaloop.com.mx",
   /** Last update of the texts, shown on the page. */
