@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
 import { href } from "../lib/router"
 import RoiCalculator from "../components/RoiCalculator"
@@ -104,45 +104,56 @@ export default function Landing() {
 
   const agenda = () => scrollToId("agenda")
 
+  // The top bar stays visible; once the page moves it gets a solid background and a line.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   return (
     <div className="landing">
-      <header className="site-header container">
-        <Logo />
-        <nav className={mobileMenu ? "open" : ""} aria-label="Secciones">
-          <Jump to="how-it-works" onDone={() => setMobileMenu(false)}>
-            Cómo funciona
-          </Jump>
-          <Jump to="features" onDone={() => setMobileMenu(false)}>
-            Funciones
-          </Jump>
-          <Jump to="calculadora" onDone={() => setMobileMenu(false)}>
-            Calculadora
-          </Jump>
-          <Jump to="pricing" onDone={() => setMobileMenu(false)}>
-            Precio
-          </Jump>
-          <Jump to="faq" onDone={() => setMobileMenu(false)}>
-            Preguntas
-          </Jump>
-          <Jump to="agenda" className="mobile-only-link" onDone={() => setMobileMenu(false)}>
-            Agenda una llamada
-          </Jump>
-          <a className="mobile-only-link" href={href("/login")}>
-            Iniciar sesión
-          </a>
-        </nav>
-        <div className="header-actions">
-          <a className="login-link" href={href("/login")}>
-            Iniciar sesión <Icon name="arrow" size={16} />
-          </a>
-          <Button onClick={agenda}>
-            Agenda una llamada <Icon name="arrow" size={16} />
-          </Button>
-        </div>
-        <button className="menu-button" aria-label={mobileMenu ? "Cerrar menú" : "Abrir menú"} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>
-          <Icon name={mobileMenu ? "close" : "menu"} />
-        </button>
-      </header>
+      <div className={`ll-topbar${scrolled ? " is-scrolled" : ""}`}>
+        <header className="site-header container">
+          <Logo />
+          <nav className={mobileMenu ? "open" : ""} aria-label="Secciones">
+            <Jump to="how-it-works" onDone={() => setMobileMenu(false)}>
+              Cómo funciona
+            </Jump>
+            <Jump to="features" onDone={() => setMobileMenu(false)}>
+              Funciones
+            </Jump>
+            <Jump to="calculadora" onDone={() => setMobileMenu(false)}>
+              Calculadora
+            </Jump>
+            <Jump to="pricing" onDone={() => setMobileMenu(false)}>
+              Precio
+            </Jump>
+            <Jump to="faq" onDone={() => setMobileMenu(false)}>
+              Preguntas
+            </Jump>
+            <Jump to="agenda" className="mobile-only-link" onDone={() => setMobileMenu(false)}>
+              Agenda una llamada
+            </Jump>
+            <a className="mobile-only-link" href={href("/login")}>
+              Iniciar sesión
+            </a>
+          </nav>
+          <div className="header-actions">
+            <a className="login-link" href={href("/login")}>
+              Iniciar sesión <Icon name="arrow" size={16} />
+            </a>
+            <Button onClick={agenda}>
+              Agenda una llamada <Icon name="arrow" size={16} />
+            </Button>
+          </div>
+          <button className="menu-button" aria-label={mobileMenu ? "Cerrar menú" : "Abrir menú"} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>
+            <Icon name={mobileMenu ? "close" : "menu"} />
+          </button>
+        </header>
+      </div>
       <main>
         <section className="hero container">
           <div className="hero-copy">

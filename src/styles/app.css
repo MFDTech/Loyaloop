@@ -566,3 +566,10 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-calc-plan p { font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, .9); }
 .ll-calc-note { font-size: 14px; line-height: 1.5; color: rgba(255, 255, 255, .75); margin-top: 8px; }
 @media (max-width: 860px) { .ll-calc { grid-template-columns: 1fr; } .ll-calc-inputs, .ll-calc-result { padding: 24px; } }
+
+/* ---------- landing: sticky top bar */
+.ll-topbar { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--brand-cream) 0%, transparent); border-bottom: 1px solid transparent; transition: background .2s, border-color .2s, box-shadow .2s; }
+.ll-topbar .site-header { transition: height .2s; }
+.ll-topbar.is-scrolled { background: color-mix(in srgb, var(--brand-cream) 92%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(12px); backdrop-filter: saturate(1.4) blur(12px); border-bottom-color: var(--line); box-shadow: 0 6px 18px rgba(25, 22, 19, .06); }
+@media (min-width: 1001px) { .ll-topbar.is-scrolled .site-header { height: 76px; } }
+.landing section[id] { scroll-margin-top: 96px; }
