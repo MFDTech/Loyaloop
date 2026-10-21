@@ -1552,9 +1552,24 @@ export function createService(store: Store, ctx: Context) {
     if (!lead.name || !lead.company) throw new ApiError("Escribe tu nombre y el de tu negocio.")
     if (!isEmail(lead.email)) throw new ApiError("Escribe un correo válido.")
     if (!/^\d{4}-\d{2}-\d{2}$/.test(lead.preferredDate) || !lead.preferredTime) throw new ApiError("Elige fecha y horario.")
-    await store.write("global", (db) => {
+    const admins = await store.write("global", (db) => {
       db.leads.unshift({ ...lead, id: uid("l_"), status: "new", createdAt: iso() })
+      return db.users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
     })
+    // Tell LoyaLoop right away; the lead is saved even if the email fails.
+    for (const to of admins)
+      await sendEmail({
+        to,
+        subject: `Nueva solicitud de llamada: ${lead.company}`,
+        heading: "Alguien quiere conocer LoyaLoop",
+        paragraphs: [
+          `${lead.name} · ${lead.company} (${lead.branches || "sucursales sin indicar"})`,
+          `Correo: ${lead.email}${lead.phone ? ` · Teléfono: ${lead.phone}` : ""}`,
+          `Prefiere: ${lead.preferredDate}, ${lead.preferredTime}`,
+          ...(lead.notes ? [`Notas: ${lead.notes}`] : []),
+        ],
+        action: { label: "Ver solicitudes", url: link("#/admin/solicitudes") },
+      })
   }
 
   // ------------------------------------------------------------ kiosk

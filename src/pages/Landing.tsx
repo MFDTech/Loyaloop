@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
 import { href } from "../lib/router"
+import RoiCalculator from "../components/RoiCalculator"
 import { Button, Icon, Logo, asset, type IconName } from "../components/ui"
 
 function scrollToId(id: string) {
@@ -113,6 +114,9 @@ export default function Landing() {
           </Jump>
           <Jump to="features" onDone={() => setMobileMenu(false)}>
             Funciones
+          </Jump>
+          <Jump to="calculadora" onDone={() => setMobileMenu(false)}>
+            Calculadora
           </Jump>
           <Jump to="pricing" onDone={() => setMobileMenu(false)}>
             Precio
@@ -445,6 +449,15 @@ export default function Landing() {
               </article>
             ))}
           </div>
+        </section>
+
+        <section id="calculadora" className="section container ll-calc-section">
+          <span className="eyebrow">HAZ LAS CUENTAS</span>
+          <h2>
+            ¿Cuánto vale que <em>vuelvan una vez más?</em>
+          </h2>
+          <p className="ll-calc-lead">Mueve los números de tu negocio y ve cuánto suman unas pocas visitas extra al mes.</p>
+          <RoiCalculator onCall={agenda} />
         </section>
 
         <section id="pricing" className="section container pricing-section">

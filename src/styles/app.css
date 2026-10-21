@@ -535,3 +535,34 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 .ll-chip:hover { border-color: var(--ll-terra); color: var(--ll-terra); }
 @media (max-width: 640px) { .ll-notice-edit { padding-left: 0; } }
 .ll-template textarea::placeholder { color: var(--ll-ink-3); }
+
+/* ---------- landing: calculator */
+.ll-calc-section h2 { margin-top: 16px; }
+.ll-calc-lead { font-size: 17px; line-height: 1.6; color: var(--text-muted); margin-top: 12px; max-width: 560px; }
+.ll-calc { margin-top: 32px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); background: #fff; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.ll-calc-inputs { padding: 36px; display: grid; gap: 28px; align-content: start; }
+.ll-calc-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+.ll-calc-kinds button { min-height: 44px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font-size: 14px; font-weight: 600; color: var(--brand-black); cursor: pointer; transition: background .15s, border-color .15s; }
+.ll-calc-kinds button:hover { border-color: var(--brand-terracotta); }
+.ll-calc-kinds button.is-active { background: var(--brand-terracotta); border-color: var(--brand-terracotta); color: #fff; }
+.ll-calc-kinds button:focus-visible { outline: 3px solid var(--brand-orange); outline-offset: 2px; }
+.ll-calc-field { display: grid; gap: 10px; }
+.ll-calc-field label { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 15px; font-weight: 600; }
+.ll-calc-field output { font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--brand-terracotta); white-space: nowrap; }
+.ll-calc-field small { font-size: 14px; color: var(--text-muted); }
+.ll-calc-field input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: pointer; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; min-height: 0; }
+.ll-calc-field input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--brand-terracotta) var(--fill), var(--line) var(--fill)); }
+.ll-calc-field input[type="range"]::-moz-range-track { height: 6px; border-radius: 99px; background: var(--line); }
+.ll-calc-field input[type="range"]::-moz-range-progress { height: 6px; border-radius: 99px; background: var(--brand-terracotta); }
+.ll-calc-field input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #fff; border: 2px solid var(--brand-terracotta); box-shadow: 0 2px 6px rgba(25, 22, 19, .18); }
+.ll-calc-field input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid var(--brand-terracotta); box-shadow: 0 2px 6px rgba(25, 22, 19, .18); }
+.ll-calc-field input[type="range"]:focus-visible { outline: 3px solid var(--brand-orange); outline-offset: 4px; border-radius: 6px; }
+.ll-calc-result { background: var(--brand-terracotta); color: #fff; padding: 36px; display: grid; gap: 8px; align-content: start; justify-items: start; }
+.ll-calc-kicker { font-size: 14px; font-weight: 700; letter-spacing: .08em; color: rgba(255, 255, 255, .8); }
+.ll-calc-big { font-family: var(--font-heading); font-size: clamp(44px, 6vw, 64px); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+.ll-calc-unit { font-size: 15px; color: rgba(255, 255, 255, .85); }
+.ll-calc-plan { width: 100%; margin: 20px 0 12px; padding: 18px; border-radius: 14px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); display: grid; gap: 6px; }
+.ll-calc-plan > b { font-family: var(--font-heading); font-size: 22px; }
+.ll-calc-plan p { font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, .9); }
+.ll-calc-note { font-size: 14px; line-height: 1.5; color: rgba(255, 255, 255, .75); margin-top: 8px; }
+@media (max-width: 860px) { .ll-calc { grid-template-columns: 1fr; } .ll-calc-inputs, .ll-calc-result { padding: 24px; } }

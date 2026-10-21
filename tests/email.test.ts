@@ -57,6 +57,15 @@ describe("emails", () => {
     expect(emails[0].action?.url).toBe(`https://loyaloop.com.mx/${link}`)
   })
 
+  it("tells LoyaLoop about every call request from the site", async () => {
+    const { api, emails } = setup({ email: true, sms: false, preview: false })
+    await api.submitLead({ name: "Laura", company: "Café Norte", email: "laura@cafenorte.test", phone: "5511112222", branches: "2 a 5 sucursales", preferredDate: "2026-11-03", preferredTime: "Mañana · 9:00 a 12:00", notes: "Usamos Clip" })
+    expect(emails).toHaveLength(1)
+    expect(emails[0]).toMatchObject({ to: "admin@loyaloop.test", subject: "Nueva solicitud de llamada: Café Norte" })
+    expect(emails[0].paragraphs.join(" ")).toContain("laura@cafenorte.test")
+    expect(emails[0].action?.url).toBe("https://loyaloop.com.mx/#/admin/solicitudes")
+  })
+
   it("refuses to register customers when codes cannot be sent", async () => {
     const { api } = setup({ email: true, sms: false, preview: false })
     await expect(api.sendCode("ESQR4M", "5512345678", "new")).rejects.toThrow(/no podemos enviar códigos/)

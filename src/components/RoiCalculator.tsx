@@ -1,0 +1,124 @@
+import { useId, useState, type ReactNode } from "react"
+import { Button, Icon } from "./ui"
+
+type Kind = "cafe" | "beauty" | "motel" | "store"
+type PlanId = "sellos" | "conectado" | "hospitalidad"
+
+/**
+ * Plan prices (MXN per branch per month, before IVA). While SHOW_PRICES is false
+ * the calculator suggests a plan by name and leaves the price for the call.
+ */
+export const PLANS: Record<PlanId, { name: string; price: number; pitch: string }> = {
+  sellos: { name: "Sellos", price: 790, pitch: "Un sello por visita, sin conectar terminal." },
+  conectado: { name: "Conectado", price: 1990, pitch: "Puntos que se suman solos desde tu terminal de cobro." },
+  hospitalidad: { name: "Hospitalidad", price: 3490, pitch: "Modo discreto, instalación en sitio y reporte mensual." },
+}
+export const SHOW_PRICES = false
+
+const KINDS: Record<Kind, { label: string; clients: number; ticket: number }> = {
+  cafe: { label: "Café o restaurante", clients: 600, ticket: 120 },
+  beauty: { label: "Estética o barbería", clients: 250, ticket: 350 },
+  motel: { label: "Motel u hotel", clients: 800, ticket: 650 },
+  store: { label: "Tienda u otro", clients: 400, ticket: 300 },
+}
+
+const money = (n: number) => `$${Math.round(n).toLocaleString("es-MX")}`
+
+function planFor(kind: Kind, ticket: number): PlanId {
+  if (kind === "motel") return "hospitalidad"
+  return ticket < 150 ? "sellos" : "conectado"
+}
+
+function Slider(props: { label: string; value: number; min: number; max: number; step: number; format: (n: number) => string; hint?: ReactNode; onChange: (n: number) => void }) {
+  const id = useId()
+  const fill = ((props.value - props.min) / (props.max - props.min)) * 100
+  return (
+    <div className="ll-calc-field">
+      <label htmlFor={id}>
+        <span>{props.label}</span>
+        <output htmlFor={id}>{props.format(props.value)}</output>
+      </label>
+      <input
+        id={id}
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        style={{ ["--fill" as string]: `${fill}%` }}
+        aria-valuetext={props.format(props.value)}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+      />
+      {props.hint && <small>{props.hint}</small>}
+    </div>
+  )
+}
+
+/** Landing calculator: how much a few extra visits are worth, in pesos. */
+export default function RoiCalculator({ onCall }: { onCall: () => void }) {
+  const [kind, setKind] = useState<Kind>("cafe")
+  const [clients, setClients] = useState(KINDS.cafe.clients)
+  const [ticket, setTicket] = useState(KINDS.cafe.ticket)
+  const [rate, setRate] = useState(8)
+
+  const extraVisits = Math.round((clients * rate) / 100)
+  const extraSales = extraVisits * ticket
+  const plan = PLANS[planFor(kind, ticket)]
+  const planWithTax = plan.price * 1.16
+  const visitsToPay = Math.max(1, Math.ceil(planWithTax / ticket))
+  const roi = extraSales / planWithTax
+
+  function pick(next: Kind) {
+    setKind(next)
+    setClients(KINDS[next].clients)
+    setTicket(KINDS[next].ticket)
+  }
+
+  return (
+    <div className="ll-calc">
+      <div className="ll-calc-inputs">
+        <div className="ll-calc-kinds" role="radiogroup" aria-label="Tipo de negocio">
+          {(Object.keys(KINDS) as Kind[]).map((k) => (
+            <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? "is-active" : ""} onClick={() => pick(k)}>
+              {KINDS[k].label}
+            </button>
+          ))}
+        </div>
+        <Slider label="Clientes distintos al mes" value={clients} min={50} max={3000} step={50} format={(n) => n.toLocaleString("es-MX")} onChange={setClients} />
+        <Slider label="Ticket promedio" value={ticket} min={50} max={2000} step={10} format={(n) => `${money(n)} MXN`} onChange={setTicket} />
+        <Slider
+          label="Clientes que vuelven una vez más al mes"
+          value={rate}
+          min={2}
+          max={20}
+          step={1}
+          format={(n) => `${n}%`}
+          hint="Una estimación prudente está entre 5% y 10%."
+          onChange={setRate}
+        />
+      </div>
+      <div className="ll-calc-result" aria-live="polite">
+        <span className="ll-calc-kicker">VENTAS EXTRA ESTIMADAS</span>
+        <strong className="ll-calc-big">{money(extraSales)}</strong>
+        <span className="ll-calc-unit">MXN al mes · {extraVisits.toLocaleString("es-MX")} visitas extra</span>
+        <div className="ll-calc-plan">
+          <span className="ll-calc-kicker">PLAN SUGERIDO</span>
+          <b>{plan.name}</b>
+          <p>{plan.pitch}</p>
+          {SHOW_PRICES ? (
+            <p>
+              {money(plan.price)} + IVA al mes por sucursal. Se paga con <b>{visitsToPay} visitas extra</b> al mes
+              {roi >= 1 ? ` · retorno ×${roi.toFixed(1)}` : ""}.
+            </p>
+          ) : (
+            <p>Te damos el precio exacto para tus sucursales en la llamada.</p>
+          )}
+        </div>
+        <Button onClick={onCall}>
+          Agenda una llamada <Icon name="arrow" size={16} />
+        </Button>
+        <small className="ll-calc-note">Estimación orientativa con tus números. No incluye el costo de las recompensas que regales; el resultado depende de tu negocio y de cómo promuevas el programa.</small>
+      </div>
+    </div>
+  )
+}
