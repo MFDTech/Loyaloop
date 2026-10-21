@@ -201,7 +201,7 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
                   </div>
                 </fieldset>
               )}
-              {!card.discreet && <Check label="Quiero recibir avisos de beneficios en mi tarjeta" checked={form.promotions} onChange={(v) => set("promotions", v)} />}
+              {!card.discreet && <Check label="Quiero recibir notificaciones de promociones" checked={form.promotions} onChange={(v) => set("promotions", v)} />}
               <Check
                 label={
                   <>
