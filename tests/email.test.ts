@@ -59,11 +59,11 @@ describe("emails", () => {
 
   it("refuses to register customers when codes cannot be sent", async () => {
     const { api } = setup({ email: true, sms: false, preview: false })
-    await expect(api.sendCode("AFF7Q2", "5512345678", "new")).rejects.toThrow(/no podemos enviar códigos/)
+    await expect(api.sendCode("ESQR4M", "5512345678", "new")).rejects.toThrow(/no podemos enviar códigos/)
     const withSms = setup({ email: false, sms: true, preview: false })
-    const sent = await withSms.api.sendCode("AFF7Q2", "5512345678", "new")
+    const sent = await withSms.api.sendCode("ESQR4M", "5512345678", "new")
     expect(sent.previewCode).toBe("")
-    expect(withSms.sms[0]).toMatch(/^\d{6} es tu código de Club de beneficios/)
+    expect(withSms.sms[0]).toMatch(/^\d{6} es tu código de Café La Esquina/)
   })
 
   it("renders a safe HTML email with a plain text version", () => {

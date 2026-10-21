@@ -81,6 +81,7 @@ export function createSeed(now = Date.now()): DB {
         brand: { color: "#8A2E12" },
         discreet: false,
         neutralName: "Mi tarjeta de beneficios",
+        askPhone: true,
         locationAlerts: true,
         createdAt: ago(40),
       },

@@ -239,6 +239,7 @@ export interface NewBusiness {
   discreet: boolean
   neutralName: string
   locationAlerts: boolean
+  askPhone?: boolean
   provider?: Provider
   ownerName: string
   ownerEmail: string
@@ -265,6 +266,8 @@ export interface PublicCard {
   program: Pick<Program, "pointsPerPeso" | "minPurchase" | "stampGoal" | "stampMinPurchase" | "expirationMonths" | "tiers" | "welcomeBonus" | "birthdayBonus">
   rewards: Pick<Reward, "id" | "name" | "cost" | "description">[]
   contact: { email: string; phone: string }
+  /** Registration asks for the mobile number and a code; otherwise only a name. */
+  askPhone: boolean
 }
 
 export interface CardHolder {
@@ -279,6 +282,7 @@ export interface CardHolder {
 
 export interface RegistrationInput {
   name: string
+  /** Empty when the business does not ask for it. */
   phone: string
   email: string
   birthday: string
@@ -586,7 +590,7 @@ export function createService(store: Store, ctx: Context) {
         ...c,
         tierName: program.tiers.find((t) => t.id === c.tierId)?.name,
         visits: visits.get(c.id) || 0,
-        employee: engine.employeeStatus(db, a.businessId, c.phone).employee,
+        employee: engine.employeeStatus(db, a.businessId, c).employee,
       }))
   }
 
@@ -1140,7 +1144,7 @@ export function createService(store: Store, ctx: Context) {
     await store.write(B(id), (db) => {
       const created = iso()
       const discreet = !!input.discreet
-      db.businesses.push({ id, name, sector: text(input.sector, 60), contactName: text(input.contactName, 80), email: text(input.email, 200), phone: normalizePhone(input.phone || ""), status: input.status === "active" ? "active" : "trial", brand: input.brand, discreet, neutralName: text(input.neutralName, 40) || "Mi tarjeta de beneficios", locationAlerts: discreet ? false : !!input.locationAlerts, createdAt: created })
+      db.businesses.push({ id, name, sector: text(input.sector, 60), contactName: text(input.contactName, 80), email: text(input.email, 200), phone: normalizePhone(input.phone || ""), status: input.status === "active" ? "active" : "trial", brand: input.brand, discreet, neutralName: text(input.neutralName, 40) || "Mi tarjeta de beneficios", locationAlerts: discreet ? false : !!input.locationAlerts, askPhone: !!input.askPhone, createdAt: created })
       for (const b of input.branches) {
         const branchId = uid("br_")
         db.branches.push({ id: branchId, businessId: id, name: text(b.name, 80), address: text(b.address, 200), code: readableCode(6), createdAt: created })
@@ -1188,11 +1192,12 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts">>) {
+  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone">>) {
     const a = await asAdmin()
-    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts"] as const
+    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone"] as const
     const patch: Record<string, unknown> = {}
     for (const key of allowed) if (input[key] !== undefined) patch[key] = input[key]
+    if (patch.askPhone !== undefined) patch.askPhone = !!patch.askPhone
     if (patch.email !== undefined && !isEmail(String(patch.email))) throw new ApiError("El correo de contacto no es válido.")
     if (patch.name !== undefined && !text(patch.name)) throw new ApiError("El nombre no puede quedar vacío.")
     if (patch.status !== undefined && !["active", "trial", "paused"].includes(String(patch.status))) throw new ApiError("Estado no válido.")
@@ -1305,6 +1310,7 @@ export function createService(store: Store, ctx: Context) {
       program: { pointsPerPeso: program.pointsPerPeso, minPurchase: program.minPurchase, stampGoal: program.stampGoal, stampMinPurchase: program.stampMinPurchase, expirationMonths: program.expirationMonths, tiers: program.tiers, welcomeBonus: program.welcomeBonus, birthdayBonus: program.birthdayBonus },
       rewards: db.rewards.filter((r) => r.businessId === businessId && r.active).map(({ id, name, cost, description }) => ({ id, name, cost, description })),
       contact: { email: business.email, phone: business.phone },
+      askPhone: !!business.askPhone,
     }
   }
 
@@ -1337,6 +1343,8 @@ export function createService(store: Store, ctx: Context) {
 
   async function sendCode(code: string, phoneInput: string, mode: "new" | "recover"): Promise<{ previewCode: string; existing: boolean; channel: CodeChannel | "preview" }> {
     const { business } = await branchByCode(code)
+    // Businesses that do not ask for the phone never send codes (no cost, no abuse).
+    if (!business.askPhone) throw new ApiError("Este negocio no usa el celular para la tarjeta.", "phone_not_used")
     const phone = normalizePhone(String(phoneInput || ""))
     if (phone.length !== 10) throw new ApiError("Escribe un celular de 10 dígitos.")
     const result = await store.write(B(business.id), (db) => {
@@ -1433,16 +1441,97 @@ export function createService(store: Store, ctx: Context) {
     })
     if ("wrong" in result) throw new ApiError(`El código no coincide. Te quedan ${result.wrong} intentos.`, "wrong_code")
     const { customerId, ...rest } = result
+    // The card exists even if a wallet fails; the person can add it later with «Recupérala».
+    return cardWithLinks(business.id, customerId, rest)
+  }
+
+  async function cardWithLinks(businessId: string, customerId: string, rest: { card: PublicCard; holder: CardHolder; created: boolean }) {
     let links: WalletLinks = {}
     if (ctx.wallets) {
       try {
-        links = await ctx.wallets.links(business.id, customerId)
+        links = await ctx.wallets.links(businessId, customerId)
       } catch (error) {
-        // The card exists either way; the person can add it to the wallet later with «Recupérala».
         console.error("[wallet] no se pudo preparar el pase", (error as Error).message)
       }
     }
     return { ...rest, links }
+  }
+
+  /** Card with only a name (or nickname): businesses that do not ask for the phone. */
+  async function createCard(code: string, input: Omit<RegistrationInput, "phone">): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {
+    const { branch, business } = await branchByCode(code)
+    if (business.askPhone) throw new ApiError("Este negocio pide tu celular para crear la tarjeta.", "phone_required")
+    if (!input?.privacy) throw new ApiError("Necesitas aceptar el aviso de privacidad.")
+    const name = text(input.name, 60)
+    if (!name) throw new ApiError("Escribe tu nombre o cómo te decimos.")
+    const email = text(input.email, 200).toLowerCase()
+    if (email && !isEmail(email)) throw new ApiError("El correo no es válido.")
+    const result = await store.write(B(business.id), (db) => {
+      const at = iso()
+      let token = customerToken()
+      while (db.customers.some((c) => c.token === token)) token = customerToken()
+      const customer: Customer = {
+        id: uid("c_"),
+        businessId: business.id,
+        name,
+        phone: "",
+        email,
+        birthday: /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(input.birthday || "") ? input.birthday : "",
+        token,
+        points: 0,
+        stamps: 0,
+        earnedRewards: [],
+        branchId: branch.id,
+        promotionsOptIn: !!input.promotions,
+        privacyAcceptedAt: at,
+        createdAt: at,
+        lastActivityAt: at,
+      }
+      db.customers.push(customer)
+      engine.welcome(db, customer, now(), true)
+      engine.recomputeTier(db, customer, now())
+      return { card: publicCard(db, business.id), holder: holder(db, customer), created: true, customerId: customer.id }
+    })
+    const { customerId, ...rest } = result
+    return cardWithLinks(business.id, customerId, rest)
+  }
+
+  /** Emails a link to open the card again. Same answer whether or not the email has a card. */
+  async function sendCardLink(code: string, emailInput: string): Promise<{ previewLink?: string }> {
+    const { business } = await branchByCode(code)
+    const email = text(emailInput, 200).toLowerCase()
+    if (!isEmail(email)) throw new ApiError("Escribe un correo válido.")
+    const token = readableCode(32)
+    const found = await store.write(B(business.id), (db) => {
+      const customer = db.customers
+        .filter((c) => c.businessId === business.id && c.email.toLowerCase() === email)
+        .sort((x, y) => (x.lastActivityAt < y.lastActivityAt ? 1 : -1))[0]
+      if (!customer) return null
+      customer.cardLink = { token, expiresAt: iso(now() + 30 * MINUTE) }
+      return customer.name
+    })
+    if (!found) return {}
+    const name = business.discreet ? business.neutralName : business.name
+    const path = `#/r/${code}/tarjeta/${token}`
+    await sendEmail({
+      to: email,
+      subject: `Tu tarjeta de ${name}`,
+      heading: "Aquí está tu tarjeta",
+      paragraphs: [`Hola, ${found.split(" ")[0]}.`, `Abre el enlace en tu celular para ver tu tarjeta de ${name} y guardarla en tu Wallet. Vence en 30 minutos.`],
+      action: { label: "Abrir mi tarjeta", url: link(path) },
+      footnote: "Si no lo pediste, ignora este correo.",
+    })
+    return ctx.preview ? { previewLink: path } : {}
+  }
+
+  async function openCardLink(code: string, token: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {
+    const { business } = await branchByCode(code)
+    const clean = String(token || "")
+    if (!/^[A-Z0-9]{32}$/.test(clean)) throw new ApiError("El enlace no es válido.", "not_found")
+    const db = await store.read(B(business.id))
+    const customer = db.customers.find((c) => c.businessId === business.id && c.cardLink?.token === clean)
+    if (!customer || new Date(customer.cardLink!.expiresAt).getTime() < now()) throw new ApiError("El enlace venció. Pide otro desde «¿Ya tienes tarjeta?».", "expired")
+    return cardWithLinks(business.id, customer.id, { card: publicCard(db, business.id), holder: holder(db, customer), created: false })
   }
 
   async function recoverCard(code: string, phoneInput: string, sms: string) {
@@ -1663,6 +1752,9 @@ export function createService(store: Store, ctx: Context) {
     sendCode,
     completeRegistration,
     recoverCard,
+    createCard,
+    sendCardLink,
+    openCardLink,
     submitLead,
     // kiosk
     pairDevice,
@@ -1685,7 +1777,7 @@ export const PUBLIC_METHODS = [
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
-  "registration", "sendCode", "completeRegistration", "recoverCard", "submitLead",
+  "registration", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 

@@ -41,6 +41,8 @@ export interface Business {
   phone: string
   status: BusinessStatus
   brand: Brand
+  /** Ask the customer's mobile number (with a code) to create the card. Off: name only. */
+  askPhone?: boolean
   /** Neutral name on the pass and registration page, no location alerts. */
   discreet: boolean
   neutralName: string
@@ -152,6 +154,10 @@ export interface Customer {
   privacyAcceptedAt: string
   createdAt: string
   lastActivityAt: string
+  /** Welcome bonus waiting for the first purchase or visit (cards without a verified phone). */
+  welcomePending?: boolean
+  /** One-time link to open the card again, sent by email. */
+  cardLink?: { token: string; expiresAt: string }
   /** Year of the last birthday notice, so it is sent once. */
   birthdayNoticeYear?: number
   /** Last «Te extrañamos»; sent again only after a new visit. */

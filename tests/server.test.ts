@@ -146,21 +146,21 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
   })
 
   it("sends the SMS code instead of returning it outside preview, and pairs a kiosk by header", async () => {
-    const sent1 = await rpc("sendCode", ["AFF7Q2", "5591112233", "new"])
+    const sent1 = await rpc("sendCode", ["ESQR4M", "5591112233", "new"])
     expect(sent1.body.result.previewCode).toBe("")
     expect(sent[0].to).toBe("5591112233")
     const code = sent[0].text.slice(0, 6)
-    const done = await rpc("completeRegistration", ["AFF7Q2", { name: "Ana", phone: "5591112233", email: "", birthday: "", promotions: false, privacy: true }, code])
+    const done = await rpc("completeRegistration", ["ESQR4M", { name: "Ana", phone: "5591112233", email: "", birthday: "", promotions: false, privacy: true }, code])
     expect(done.body.result.created).toBe(true)
 
-    const owner = await login("dueno@affair.test")
-    const pairing = await rpc("createPairingCode", ["rg_affair_1"], { cookie: owner })
+    const owner = await login("dueno@laesquina.test")
+    const pairing = await rpc("createPairingCode", ["rg_esq_roma"], { cookie: owner })
     const paired = await rpc("pairDevice", [pairing.body.result.code, "Tablet"])
     expect(paired.body.device).toMatch(/^dev_/)
     const info = await rpc("kiosk", [], { device: paired.body.device })
     expect(info.body.result.registerName).toBeTruthy()
     const scan = await rpc("kioskScan", [done.body.result.holder.token], { device: paired.body.device })
-    expect(scan.body.result.status).toBe("pending")
+    expect(scan.body.result.status).toBe("visit")
     expect((await rpc("kiosk", [], { device: "dev_inventado" })).status).toBe(401)
   })
 

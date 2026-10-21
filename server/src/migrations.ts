@@ -246,4 +246,12 @@ create index campaigns_business on campaigns (business_id, at);
 create index campaigns_scheduled on campaigns ((data->>'status')) where data->>'status' = 'scheduled';
 `,
   },
+  {
+    id: "006_optional_phone",
+    sql: `
+-- Customers may register without a phone: unique only when there is one.
+drop index customers_phone;
+create unique index customers_phone on customers (business_id, (data->>'phone')) where coalesce(data->>'phone', '') <> '';
+`,
+  },
 ]

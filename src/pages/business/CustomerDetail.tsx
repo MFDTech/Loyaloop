@@ -131,7 +131,7 @@ export default function CustomerDetail({ id, me }: { id: string; me: api.Me }) {
             <dl className="ll-dl">
               <div>
                 <dt>Celular</dt>
-                <dd>{formatPhone(customer.phone)}</dd>
+                <dd>{customer.phone ? formatPhone(customer.phone) : "No lo dio"}</dd>
               </div>
               <div>
                 <dt>Correo</dt>

@@ -40,7 +40,7 @@ function Router() {
     case "invitacion":
       return <AcceptInvite token={second || ""} />
     case "r":
-      return <Registration code={second || ""} />
+      return <Registration code={second || ""} cardToken={route.parts[2] === "tarjeta" ? route.parts[3] || "" : ""} />
     case "caja":
       return <Kiosk code={second || ""} />
     case "legal":

@@ -163,6 +163,7 @@ export interface BrandDraft {
   discreet: boolean
   neutralName: string
   locationAlerts: boolean
+  askPhone: boolean
 }
 
 const MAX_IMAGE = 400 * 1024
@@ -251,6 +252,12 @@ export function BrandEditor({ value, onChange, name, stamps = false }: { value: 
         onChange={(discreet) => onChange({ ...value, discreet, locationAlerts: discreet ? false : value.locationAlerts })}
       />
       {value.discreet && <Field label="Nombre neutro" value={value.neutralName} maxLength={40} onChange={(e) => onChange({ ...value, neutralName: e.target.value })} hint="Así se verá en la Wallet del cliente." />}
+      <Check
+        label="Pedir celular al registrarse"
+        hint="Apagado: el cliente solo escribe su nombre (o un apodo) y su tarjeta sale al instante; el bono de bienvenida llega en su primera compra o visita. Encendido: confirma su celular con un código."
+        checked={value.askPhone}
+        onChange={(askPhone) => onChange({ ...value, askPhone })}
+      />
       <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />
     </div>
   )
@@ -260,6 +267,7 @@ export function BrandEditor({ value, onChange, name, stamps = false }: { value: 
 export function draftCard(name: string, program: ProgramDraft, brand: BrandDraft, rewards: { id?: string; name: string; cost: number; description: string }[]): PublicCard {
   return {
     businessName: brand.discreet ? brand.neutralName || "Mi tarjeta de beneficios" : name || "Tu negocio",
+    askPhone: brand.askPhone,
     discreet: brand.discreet,
     brand: brand.brand,
     type: program.type,

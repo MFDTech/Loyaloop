@@ -20,6 +20,7 @@ export function cardFrom(business: Business, program: Program, rewards: Reward[]
     },
     rewards: rewards.filter((r) => r.active).map(({ id, name, cost, description }) => ({ id, name, cost, description })),
     contact: { email: business.email, phone: business.phone },
+    askPhone: !!business.askPhone,
   }
 }
 

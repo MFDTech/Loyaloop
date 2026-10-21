@@ -120,10 +120,9 @@ for (const [label, make] of backends) {
         await expect(api.kioskScan(c.token)).rejects.toThrow(/límite/)
       })
 
-      it("rejects employee phones that are excluded", async () => {
-        // Register the cashier's phone as a customer, then scan it.
-        const sent = await api.sendCode("AFF7Q2", "55 1111 0003", "new")
-        const result = await api.completeRegistration("AFF7Q2", { name: "Recepción", phone: "5511110003", email: "", birthday: "", promotions: false, privacy: true }, sent.previewCode)
+      it("rejects employees that are excluded, recognized by their email", async () => {
+        // The cashier makes a card with their work email, then scans it.
+        const result = await api.createCard("AFF7Q2", { name: "Recepción", email: "Cajero@affair.test", birthday: "", promotions: false, privacy: true })
         useAffairTablet()
         await expect(api.kioskScan(result.holder.token)).rejects.toThrow(/empleado/)
       })
@@ -242,16 +241,60 @@ for (const [label, make] of backends) {
     })
 
     describe("registration", () => {
-      it("creates the card with the welcome bonus and recovers it later", async () => {
-        const sent = await api.sendCode("AFF7Q2", "5598765432", "new")
-        await expect(api.completeRegistration("AFF7Q2", { name: "Nueva", phone: "5598765432", email: "", birthday: "03-14", promotions: true, privacy: true }, "000000")).rejects.toThrow(/no coincide/)
-        const result = await api.completeRegistration("AFF7Q2", { name: "Nueva Clienta", phone: "5598765432", email: "", birthday: "03-14", promotions: true, privacy: true }, sent.previewCode)
+      it("creates the card with only a name; the welcome bonus waits for the first purchase", async () => {
+        const reg = await api.registration("AFF7Q2")
+        expect(reg.card.askPhone).toBe(false)
+        await expect(api.sendCode("AFF7Q2", "5598765432", "new")).rejects.toThrow(/no usa el celular/)
+        await expect(api.createCard("AFF7Q2", { name: "  ", email: "", birthday: "", promotions: false, privacy: true })).rejects.toThrow(/nombre/)
+        await expect(api.createCard("AFF7Q2", { name: "Mar", email: "no-es-correo", birthday: "", promotions: false, privacy: true })).rejects.toThrow(/correo/)
+        const result = await api.createCard("AFF7Q2", { name: "Mar", email: "", birthday: "03-14", promotions: true, privacy: true })
         expect(result.created).toBe(true)
-        expect(result.holder.points).toBe(100)
+        expect(result.holder.points).toBe(0)
         expect(result.card.businessName).toBe("Club de beneficios")
+        // Several cards without a phone can coexist.
+        const second = await api.createCard("AFF7Q2", { name: "Otra", email: "", birthday: "", promotions: false, privacy: true })
+        expect(second.holder.token).not.toBe(result.holder.token)
+        // Visiting the same day a payment comes in gives the bonus once.
+        useAffairTablet()
+        await api.kioskScan(result.holder.token)
         advance(1)
-        const again = await api.sendCode("AFF7Q2", "5598765432", "recover")
-        const recovered = await api.recoverCard("AFF7Q2", "5598765432", again.previewCode)
+        await admin()
+        await api.simulatePayment("b_affair", "rg_affair_1", 500, 0)
+        await as("dueno@affair.test")
+        const row = (await api.customers()).find((c) => c.token === result.holder.token)!
+        expect(row.points).toBe(100 + 50)
+        advance(60 * 24)
+        useAffairTablet()
+        await api.kioskScan(result.holder.token)
+        advance(1)
+        await admin()
+        await api.simulatePayment("b_affair", "rg_affair_1", 500, 0)
+        await as("dueno@affair.test")
+        expect((await api.customers()).find((c) => c.token === result.holder.token)!.points).toBe(100 + 50 + 50)
+      })
+
+      it("emails a 30-minute link to open the card again", async () => {
+        const result = await api.createCard("AFF7Q2", { name: "Mar", email: "mar@example.com", birthday: "", promotions: false, privacy: true })
+        expect(await api.sendCardLink("AFF7Q2", "nadie@example.com")).toEqual({})
+        const { previewLink } = await api.sendCardLink("AFF7Q2", "MAR@example.com")
+        const token = previewLink!.split("/").pop()!
+        const opened = await api.openCardLink("AFF7Q2", token)
+        expect(opened.holder.token).toBe(result.holder.token)
+        await expect(api.openCardLink("ESQR4M", token)).rejects.toThrow()
+        advance(31)
+        await expect(api.openCardLink("AFF7Q2", token)).rejects.toThrow(/venció/)
+      })
+
+      it("uses the phone and gives the bonus at once where the business asks for it", async () => {
+        await expect(api.createCard("ESQR4M", { name: "Sin cel", email: "", birthday: "", promotions: false, privacy: true })).rejects.toThrow(/celular/)
+        const sent = await api.sendCode("ESQR4M", "5598765432", "new")
+        await expect(api.completeRegistration("ESQR4M", { name: "Nueva", phone: "5598765432", email: "", birthday: "03-14", promotions: true, privacy: true }, "000000")).rejects.toThrow(/no coincide/)
+        const result = await api.completeRegistration("ESQR4M", { name: "Nueva Clienta", phone: "5598765432", email: "", birthday: "03-14", promotions: true, privacy: true }, sent.previewCode)
+        expect(result.created).toBe(true)
+        expect(result.holder.stamps).toBe(1)
+        advance(1)
+        const again = await api.sendCode("ESQR4M", "5598765432", "recover")
+        const recovered = await api.recoverCard("ESQR4M", "5598765432", again.previewCode)
         expect(recovered.created).toBe(false)
         expect(recovered.holder.token).toBe(result.holder.token)
       })
@@ -298,8 +341,7 @@ for (const [label, make] of backends) {
       })
 
       it("welcomes new customers with the neutral name in discreet mode", async () => {
-        const sent = await api.sendCode("AFF7Q2", "5598761111", "new")
-        await api.completeRegistration("AFF7Q2", { name: "Ana López", phone: "5598761111", email: "", birthday: "", promotions: false, privacy: true }, sent.previewCode)
+        await api.createCard("AFF7Q2", { name: "Ana López", email: "", birthday: "", promotions: false, privacy: true })
         await as("dueno@affair.test")
         const notices = await api.notices()
         expect(notices.find((n) => n.event === "welcome")!.message).toBe("¡Bienvenido, Ana! Tu tarjeta de Club de beneficios ya está lista.")

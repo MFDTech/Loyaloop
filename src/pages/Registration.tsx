@@ -20,19 +20,25 @@ function platform(): "apple" | "google" | "desktop" {
 }
 
 function perks(card: api.PublicCard): string[] {
+  const later = !card.askPhone
   const p = card.program
   const list: string[] = []
   if (card.type === "stamps") list.push(`Junta ${p.stampGoal} sellos${p.stampMinPurchase ? ` en compras desde ${`$${int(p.stampMinPurchase)}`}` : ""} y obtén ${card.rewards[0]?.name.toLowerCase() || "tu recompensa"}.`)
   else list.push(`Gana ${int(p.pointsPerPeso * 100)} puntos por cada $100${p.minPurchase ? ` en compras desde ${`$${int(p.minPurchase)}`}` : ""}.`)
   if (card.type === "tiers" && p.tiers.length > 1) list.push(`Sube a ${p.tiers.slice(1).map((t) => t.name).join(" y ")} y multiplica tus puntos.`)
   if (card.type !== "stamps" && card.rewards.length) list.push(`Cámbialos por ${card.rewards.slice(0, 2).map((r) => r.name.toLowerCase()).join(" o ")}${card.rewards.length > 2 ? " y más" : ""}.`)
-  if (p.welcomeBonus) list.push(card.type === "stamps" ? `Empiezas con ${p.welcomeBonus} ${p.welcomeBonus === 1 ? "sello" : "sellos"} de regalo.` : `Recibes ${int(p.welcomeBonus)} puntos de bienvenida.`)
+  if (p.welcomeBonus)
+    list.push(
+      card.type === "stamps"
+        ? `${later ? "En tu primera visita recibes" : "Empiezas con"} ${p.welcomeBonus} ${p.welcomeBonus === 1 ? "sello" : "sellos"} de regalo.`
+        : `Recibes ${int(p.welcomeBonus)} puntos de bienvenida${later ? " en tu primera compra" : ""}.`,
+    )
   if (p.birthdayBonus) list.push("Un regalo en tu cumpleaños.")
   list.push("Vive en la Wallet de tu celular. No descargas ninguna app.")
   return list
 }
 
-export default function Registration({ code }: { code: string }) {
+export default function Registration({ code, cardToken = "" }: { code: string; cardToken?: string }) {
   const info = useAsync(() => api.registration(code), [code])
   const [step, setStep] = useState<Step>("form")
   const [form, setForm] = useState({ name: "", phone: "", email: "", day: "", month: "", promotions: false, privacy: false })
@@ -44,6 +50,10 @@ export default function Registration({ code }: { code: string }) {
   const [result, setResult] = useState<{ card: api.PublicCard; holder: api.CardHolder; created: boolean; links: api.WalletLinks } | null>(null)
   const [localError, setLocalError] = useState("")
   const send = useAction(api.sendCode)
+  const create = useAction(api.createCard)
+  const mail = useAction(api.sendCardLink)
+  const [mailed, setMailed] = useState<{ previewLink?: string } | null>(null)
+  const opened = useAsync(() => (cardToken ? api.openCardLink(code, cardToken) : Promise.resolve(null)), [code, cardToken])
   const confirm = useAction(async (mode: "new" | "recover") => {
     const birthday = form.day && form.month ? `${form.month.padStart(2, "0")}-${form.day.padStart(2, "0")}` : ""
     return mode === "recover"
@@ -51,6 +61,14 @@ export default function Registration({ code }: { code: string }) {
       : api.completeRegistration(code, { name: form.name, phone: form.phone, email: form.email, birthday, promotions: form.promotions, privacy: form.privacy }, sms)
   })
   const [mode, setMode] = useState<"new" | "recover">("new")
+
+  // Link from the recovery email: show the card right away.
+  useEffect(() => {
+    if (opened.data) {
+      setResult(opened.data)
+      setStep("done")
+    }
+  }, [opened.data])
 
   useEffect(() => {
     if (!cooldown) return
@@ -81,6 +99,7 @@ export default function Registration({ code }: { code: string }) {
     )
 
   const card = result?.card || info.data.card
+  const askPhone = info.data.card.askPhone
   const { ink } = inkFor(card.brand.color)
   const set = (key: keyof typeof form, value: string | boolean) => setForm({ ...form, [key]: value })
 
@@ -88,9 +107,24 @@ export default function Registration({ code }: { code: string }) {
     e?.preventDefault()
     setLocalError("")
     if (nextMode === "new") {
-      if (!form.name.trim()) return setLocalError("Escribe tu nombre.")
+      if (!form.name.trim()) return setLocalError(askPhone ? "Escribe tu nombre." : "Escribe tu nombre o cómo te decimos.")
       if (!form.privacy) return setLocalError("Para crear tu tarjeta necesitas aceptar el aviso de privacidad.")
       if (!!form.day !== !!form.month) return setLocalError("Completa el día y el mes de tu cumpleaños, o deja ambos vacíos.")
+    }
+    if (!askPhone) {
+      if (nextMode === "recover") {
+        const r = await mail.run(code, form.email)
+        if (r.ok) setMailed(r.value)
+        return
+      }
+      const birthday = form.day && form.month ? `${form.month.padStart(2, "0")}-${form.day.padStart(2, "0")}` : ""
+      const r = await create.run(code, { name: form.name, email: form.email, birthday, promotions: form.promotions, privacy: form.privacy })
+      if (r.ok) {
+        setResult(r.value)
+        setStep("done")
+        window.scrollTo(0, 0)
+      }
+      return
     }
     if (normalizePhone(form.phone).length !== 10) return setLocalError("Escribe tu celular a 10 dígitos.")
     const r = await send.run(code, form.phone, nextMode)
@@ -113,6 +147,11 @@ export default function Registration({ code }: { code: string }) {
       </header>
       <main className="ll-reg-body">
         <div className="ll-reg-card">
+          {cardToken && opened.error && step !== "done" && (
+            <div style={{ marginBottom: 16 }}>
+              <Notice tone="error">{opened.error}</Notice>
+            </div>
+          )}
           {step === "form" && (
             <form className="ll-form" onSubmit={(e) => request(e, "new")} noValidate>
               <div>
@@ -125,9 +164,18 @@ export default function Registration({ code }: { code: string }) {
                   ))}
                 </ul>
               </div>
-              <Field label="Nombre" autoComplete="given-name" value={form.name} maxLength={60} onChange={(e) => set("name", e.target.value)} />
-              <Field label="Celular" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10 dígitos" value={form.phone} onChange={(e) => set("phone", e.target.value)} hint="Te enviamos un código para confirmar que es tuyo." />
-              <Field label="Correo" optional type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              {askPhone ? (
+                <>
+                  <Field label="Nombre" autoComplete="given-name" value={form.name} maxLength={60} onChange={(e) => set("name", e.target.value)} />
+                  <Field label="Celular" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10 dígitos" value={form.phone} onChange={(e) => set("phone", e.target.value)} hint="Te enviamos un código para confirmar que es tuyo." />
+                  <Field label="Correo" optional type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+                </>
+              ) : (
+                <>
+                  <Field label="¿Cómo te llamamos?" autoComplete="given-name" value={form.name} maxLength={60} onChange={(e) => set("name", e.target.value)} hint="Así aparece en tu tarjeta. Puede ser solo tu nombre o un apodo." />
+                  <Field label="Correo" optional type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} hint="Solo para mandarte tu tarjeta si algún día la pierdes." />
+                </>
+              )}
               {!!card.program.birthdayBonus && (
                 <fieldset className="ll-fieldset">
                   <legend style={{ fontSize: 14, fontFamily: "inherit" }}>
@@ -166,9 +214,9 @@ export default function Registration({ code }: { code: string }) {
                 checked={form.privacy}
                 onChange={(v) => set("privacy", v)}
               />
-              {(localError || send.error) && <Notice tone="error">{localError || send.error}</Notice>}
-              <Button type="submit" size="lg" block loading={send.pending}>
-                Continuar
+              {(localError || send.error || create.error) && <Notice tone="error">{localError || send.error || create.error}</Notice>}
+              <Button type="submit" size="lg" block loading={send.pending || create.pending}>
+                {askPhone ? "Continuar" : "Crear mi tarjeta"}
               </Button>
               <p className="ll-hint" style={{ textAlign: "center" }}>
                 ¿Ya tienes tarjeta?{" "}
@@ -179,7 +227,43 @@ export default function Registration({ code }: { code: string }) {
             </form>
           )}
 
-          {step === "recover" && (
+          {step === "recover" && !askPhone && (
+            <form className="ll-form" onSubmit={(e) => request(e, "recover")} noValidate>
+              <div>
+                <h2>¿Ya tienes tarjeta?</h2>
+                <p className="ll-reg-lead">Si cambiaste de celular, tu tarjeta aparece sola en tu Wallet al entrar con la misma cuenta de Apple o Google.</p>
+                <p className="ll-reg-lead">Si nos diste tu correo al registrarte, te mandamos un enlace para abrirla.</p>
+              </div>
+              {mailed ? (
+                <Notice tone="success" title="Revisa tu correo">
+                  Si hay una tarjeta con ese correo, te llegará un enlace en unos minutos.
+                  {mailed.previewLink && (
+                    <>
+                      {" "}
+                      Versión de prueba:{" "}
+                      <a className="ll-link" href={mailed.previewLink}>
+                        abrir el enlace
+                      </a>
+                      .
+                    </>
+                  )}
+                </Notice>
+              ) : (
+                <>
+                  <Field label="Correo" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+                  {mail.error && <Notice tone="error">{mail.error}</Notice>}
+                  <Button type="submit" size="lg" block loading={mail.pending}>
+                    Mandarme el enlace
+                  </Button>
+                </>
+              )}
+              <Button variant="ghost" block onClick={() => (setMailed(null), mail.setError(""), setStep("form"))}>
+                Crear una tarjeta nueva
+              </Button>
+            </form>
+          )}
+
+          {step === "recover" && askPhone && (
             <form className="ll-form" onSubmit={(e) => request(e, "recover")} noValidate>
               <div>
                 <h2>Recupera tu tarjeta</h2>
@@ -295,7 +379,7 @@ function Done({ card, holder, links, code }: { card: api.PublicCard; holder: api
       {device === "desktop" && (
         <div className="ll-reg-desktop">
           <Qr value={absoluteLink(`/r/${code}`)} size={120} label="Código para abrir este registro en tu celular" />
-          <p className="ll-hint">¿Estás en una computadora? Escanea este código con tu celular, toca «Recupérala» y guárdala en tu Wallet.</p>
+          <p className="ll-hint">¿Estás en una computadora? Escanea este código con tu celular, toca «Recupérala» {card.askPhone ? "y guárdala en tu Wallet." : "y pide el enlace a tu correo."}</p>
         </div>
       )}
     </div>

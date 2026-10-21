@@ -26,7 +26,7 @@ export default function NewBusiness() {
   const [branches, setBranches] = useState([{ name: "", address: "" }])
   const [program, setProgram] = useState<ProgramDraft>(blankProgram())
   const [rewards, setRewards] = useState<RewardDraft[]>([{ name: "", cost: 500, description: "" }])
-  const [brand, setBrand] = useState<BrandDraft>({ brand: { color: "#8A2E12" }, discreet: false, neutralName: "", locationAlerts: true })
+  const [brand, setBrand] = useState<BrandDraft>({ brand: { color: "#8A2E12" }, discreet: false, neutralName: "", locationAlerts: true, askPhone: false })
   const [provider, setProvider] = useState<"" | Provider>("")
   const [created, setCreated] = useState<{ id: string; inviteLink: string } | null>(null)
   const create = useAction(api.createBusiness)
@@ -78,6 +78,7 @@ export default function NewBusiness() {
       discreet: brand.discreet,
       neutralName: brand.neutralName,
       locationAlerts: brand.locationAlerts,
+      askPhone: brand.askPhone,
       provider: provider || undefined,
     })
     if (r.ok) {

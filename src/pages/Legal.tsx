@@ -23,8 +23,9 @@ export default function Legal() {
 
         <h2>Qué datos usamos</h2>
         <ul>
-          <li>Nombre y celular, para crear tu tarjeta y confirmar que el número es tuyo.</li>
-          <li>Correo y fecha de cumpleaños (día y mes), solo si los das.</li>
+          <li>Tu nombre o un apodo, para tu tarjeta.</li>
+          <li>Tu celular, solo si el negocio lo pide, para confirmar que el número es tuyo.</li>
+          <li>Correo (para mandarte tu tarjeta si la pierdes) y fecha de cumpleaños (día y mes), solo si los das.</li>
           <li>Tus compras en el negocio: fecha, sucursal, monto sin propina, puntos o sellos y canjes.</li>
         </ul>
         <p>No recibimos datos de tu tarjeta bancaria. El código QR de tu pase es un identificador aleatorio y no contiene datos personales.</p>
@@ -32,7 +33,8 @@ export default function Legal() {
         <h2>Para qué los usamos</h2>
         <ul>
           <li>Sumar y canjear tus puntos, sellos y recompensas.</li>
-          <li>Actualizar tu pase y enviarte avisos sobre tu saldo, recompensas, nivel y vencimientos.</li>
+          <li>Actualizar tu pase y enviarte avisos sobre tu saldo, recompensas, nivel, vencimientos y cumpleaños.</li>
+          <li>Promociones del negocio en tu tarjeta, solo si las aceptaste al registrarte.</li>
           <li>Prevenir el uso indebido de las tarjetas.</li>
         </ul>
         <p>No vendemos tus datos ni los compartimos con otros negocios.</p>

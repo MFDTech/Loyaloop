@@ -205,7 +205,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
 function CardTab({ data }: { data: AdminBundle }) {
   const { businessId: _ignored, ...current } = data.program
   const [program, setProgram] = useState<ProgramDraft>(current)
-  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts })
+  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts, askPhone: !!data.business.askPhone })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const toast = useToast()

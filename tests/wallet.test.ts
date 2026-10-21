@@ -158,6 +158,8 @@ describe.skipIf(!TEST_DATABASE_URL)("Google Wallet with the server", () => {
   }
 
   async function register(phone: string) {
+    // These checks need a business that registers by phone and gives the bonus at once.
+    await pool.query(`update businesses set data = jsonb_set(data, '{askPhone}', 'true') where data->>'id' = 'b_affair'`)
     const sent = await rpc("sendCode", ["AFF7Q2", phone, "new"])
     const done = await rpc("completeRegistration", ["AFF7Q2", { name: "Laura Prueba", phone, email: "", birthday: "", promotions: false, privacy: true }, sent.result.previewCode])
     return done.result

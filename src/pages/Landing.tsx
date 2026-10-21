@@ -61,7 +61,7 @@ const CARD_TYPES: [IconName, string, string][] = [
 ]
 
 const FAQ: [string, string][] = [
-  ["¿Mis clientes tienen que descargar una app?", "No. Tocan la etiqueta NFC de tu mostrador (o escanean su QR), confirman su celular y guardan la tarjeta en Apple Wallet o Google Wallet."],
+  ["¿Mis clientes tienen que descargar una app?", "No. Tocan la etiqueta NFC de tu mostrador (o escanean su QR), escriben su nombre y guardan la tarjeta en Apple Wallet o Google Wallet. No piden su celular."],
   ["¿El cajero tiene que capturar algo?", "No. El cliente muestra el QR de su tarjeta y paga como siempre. LoyaLoop recibe el cobro de tu terminal y suma los puntos solo, sin que nadie escriba montos."],
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
@@ -310,7 +310,7 @@ export default function Landing() {
                 <span>02</span>
                 <h3>Tus clientes se unen con un toque</h3>
               </div>
-              <p>Acercan su celular a la etiqueta NFC del mostrador, confirman su número y guardan la tarjeta en Apple Wallet o Google Wallet.</p>
+              <p>Acercan su celular a la etiqueta NFC del mostrador, escriben su nombre y guardan la tarjeta en Apple Wallet o Google Wallet.</p>
             </article>
             <article>
               <div className="step-visual grow-visual">

@@ -65,10 +65,15 @@ export function pointsFor(program: Program, base: number, multiplier = 1): numbe
   return Math.floor(base * program.pointsPerPeso * multiplier)
 }
 
-export function employeeStatus(db: DB, businessId: string, phone: string) {
-  const target = normalizePhone(phone)
+/** A card belongs to someone on the team when its phone or email matches theirs. */
+export function employeeStatus(db: DB, businessId: string, card: { phone: string; email: string }) {
+  const phone = normalizePhone(card.phone || "")
+  const email = (card.email || "").trim().toLowerCase()
   const member = db.users.find(
-    (u) => u.businessId === businessId && u.active && u.phone && normalizePhone(u.phone) === target,
+    (u) =>
+      u.businessId === businessId &&
+      u.active &&
+      ((phone && u.phone && normalizePhone(u.phone) === phone) || (email && u.email.toLowerCase() === email)),
   )
   return { employee: !!member, excluded: !!member?.excludedFromEarning }
 }
@@ -87,7 +92,7 @@ export function earningsToday(db: DB, customerId: string, now: number): number {
 /** Returns an error message when this customer may not earn right now. */
 export function earnBlocked(db: DB, customer: Customer, now: number): string | null {
   const program = programOf(db, customer.businessId)
-  if (employeeStatus(db, customer.businessId, customer.phone).excluded)
+  if (employeeStatus(db, customer.businessId, customer).excluded)
     return "Este teléfono es de un empleado y no acumula."
   if (program.dailyLimit > 0 && earningsToday(db, customer.id, now) >= program.dailyLimit)
     return `Se alcanzó el límite de ${program.dailyLimit} compras con beneficio por día.`
@@ -193,6 +198,7 @@ function addStamp(db: DB, customer: Customer, program: Program, now: number, qui
 export function creditPayment(db: DB, scan: Scan, payment: Payment, now: number): Transaction {
   const customer = db.customers.find((c) => c.id === scan.customerId)!
   const program = programOf(db, customer.businessId)
+  if (payment.amount - payment.tip > 0) settleWelcome(db, customer, now)
   const base = Math.max(0, payment.amount - payment.tip)
   const ctx = context(db, { registerId: payment.registerId, paymentId: payment.id })
   let points = 0
@@ -238,6 +244,7 @@ export function creditPayment(db: DB, scan: Scan, payment: Payment, now: number)
 export function creditVisit(db: DB, scan: Scan, device: Device, now: number): Transaction {
   const customer = db.customers.find((c) => c.id === scan.customerId)!
   const program = programOf(db, customer.businessId)
+  settleWelcome(db, customer, now)
   const stamps = addStamp(db, customer, program, now)
   const tx: Transaction = {
     id: uid("t_"),
@@ -481,10 +488,23 @@ export function refund(db: DB, txId: string, reason: string, actorId: string | u
   return tx
 }
 
-export function welcome(db: DB, customer: Customer, now: number): Transaction | null {
-  const tx = welcomeBonus(db, customer, now)
+/**
+ * New card. Without a verified phone the bonus waits for the first purchase or
+ * visit, so registering again and again gives nothing.
+ */
+export function welcome(db: DB, customer: Customer, now: number, defer = false): Transaction | null {
+  const program = programOf(db, customer.businessId)
+  let tx: Transaction | null = null
+  if (defer) customer.welcomePending = program.welcomeBonus > 0 || undefined
+  else tx = welcomeBonus(db, customer, now)
   notice(db, customer, "welcome", {}, now)
   return tx
+}
+
+function settleWelcome(db: DB, customer: Customer, now: number) {
+  if (!customer.welcomePending) return
+  customer.welcomePending = undefined
+  welcomeBonus(db, customer, now)
 }
 
 function welcomeBonus(db: DB, customer: Customer, now: number): Transaction | null {

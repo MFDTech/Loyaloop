@@ -193,7 +193,7 @@ function ReviewCard({ item }: { item: api.ReviewItem }) {
             <span className="ll-check-text">
               {c.customerName}
               <small>
-                {formatPhone(c.phone)} · escaneó {relative(c.scan.createdAt)}
+                {c.phone ? `${formatPhone(c.phone)} · ` : ""}escaneó {relative(c.scan.createdAt)}
               </small>
             </span>
           </label>
