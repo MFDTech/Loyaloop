@@ -54,13 +54,43 @@ export interface Business {
   plan?: "starter" | "pro"
   /** Signed up from the website, not created by LoyaLoop. */
   selfServe?: boolean
-  /** End of the free trial, for businesses that signed up alone. */
+  /** End of a trial LoyaLoop gave. */
   trialEndsAt?: string
+  /** Monthly price agreed with LoyaLoop (MXN). Unset: the plan's price plus extra branches. */
+  monthlyPrice?: number
+  /** Automatic monthly charge (Mercado Pago subscription). */
+  billing?: Billing
+  /** Last charges of the subscription, newest first. */
+  charges?: BillingCharge[]
   /** Who is responsible for the customers' data, as the privacy notice names it. */
   legalName?: string
   legalAddress?: string
   privacyEmail?: string
   createdAt: string
+}
+
+export type SubscriptionStatus = "pending" | "authorized" | "paused" | "cancelled"
+
+export interface Billing {
+  provider: "mercadopago"
+  subscriptionId: string
+  /** pending: the owner has not entered a card yet; authorized: charging every month. */
+  status: SubscriptionStatus
+  amount: number
+  payerEmail: string
+  /** Covered until this date: the last successful charge plus one month. */
+  paidUntil?: string
+  lastChargeAt?: string
+  nextChargeAt?: string
+  checkedAt: string
+  createdAt: string
+}
+
+export interface BillingCharge {
+  id: string
+  amount: number
+  status: "approved" | "rejected" | "pending"
+  at: string
 }
 
 export interface Branch {

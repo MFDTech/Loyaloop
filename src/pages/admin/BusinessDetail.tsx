@@ -8,6 +8,9 @@ import { dateTime, formatPhone, int, isEmail, money, roleLabel } from "../../lib
 import { PassPreview, sampleHolder } from "../../components/Pass"
 import { Badge, Button, Card, Confirm, CopyButton, Empty, ErrorState, Field, Icon, Loading, Notice, PageHeader, SelectField, Tabs, useToast } from "../../components/ui"
 import { statusLabel, statusTone } from "./Businesses"
+import { monthlyAmount } from "../../lib/service"
+
+const BILLING_LABEL = { pending: "esperando tarjeta", authorized: "activo", paused: "pausado", cancelled: "cancelado" } as const
 import { SECTORS } from "./NewBusiness"
 import { BrandEditor, NumberField, ProgramEditor, draftCard, type BrandDraft, type ProgramDraft } from "./ProgramEditor"
 
@@ -80,6 +83,7 @@ function DataTab({ data }: { data: AdminBundle }) {
     privacyEmail: business.privacyEmail || "",
   })
   const [status, setStatus] = useState<BusinessStatus | null>(null)
+  const [price, setPrice] = useState(business.monthlyPrice ? String(business.monthlyPrice) : "")
   const save = useAction(api.adminUpdateBusiness)
   const toast = useToast()
   const set = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value })
@@ -148,9 +152,35 @@ function DataTab({ data }: { data: AdminBundle }) {
           <div className="ll-stack">
             <p className="ll-hint">
               {business.plan === "starter"
-                ? "Starter ($390 al mes): una sucursal, tarjeta de sellos que el dueño edita solo."
-                : "Pro ($990 al mes): terminal conectada, todos los tipos de tarjeta y sucursales adicionales."}
+                ? "Starter: una sucursal, tarjeta de sellos que el dueño edita solo."
+                : "Pro: terminal conectada, todos los tipos de tarjeta y sucursales adicionales ($250 cada una)."}{" "}
+              Cobra <b>{money(monthlyAmount(business, data.branches.length))} al mes</b>
+              {business.monthlyPrice ? " (precio acordado)" : ""}.
             </p>
+            {business.billing ? (
+              <p className="ll-hint">
+                Pago automático: <b>{BILLING_LABEL[business.billing.status]}</b> · {business.billing.payerEmail}
+                {business.billing.paidUntil ? ` · pagado hasta el ${new Date(business.billing.paidUntil).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                {business.charges?.[0] ? ` · último cobro ${business.charges[0].status === "approved" ? "aprobado" : business.charges[0].status === "rejected" ? "rechazado" : "en proceso"}` : ""}
+              </p>
+            ) : (
+              <p className="ll-hint">Sin pago automático: paga por transferencia o aún no lo activa desde su panel.</p>
+            )}
+            <form
+              className="ll-row"
+              style={{ alignItems: "flex-end" }}
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const value = price.trim() ? Number(price) : null
+                const r = await save.run(business.id, { monthlyPrice: value })
+                if (r.ok) toast(value ? "Precio acordado guardado." : "Vuelve al precio del plan.")
+              }}
+            >
+              <Field label="Precio acordado al mes" type="number" min={0} placeholder="Precio del plan" value={price} onChange={(e) => setPrice(e.target.value)} hint="Vacío: el del plan. Si tiene pago automático, Mercado Pago cobra el nuevo monto desde el siguiente mes." />
+              <Button type="submit" variant="secondary" size="sm" loading={save.pending}>
+                Guardar precio
+              </Button>
+            </form>
             <div className="ll-row">
               <Button
                 variant="secondary"

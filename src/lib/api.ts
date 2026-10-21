@@ -5,7 +5,7 @@
 
 import { createMemoryStore } from "./memoryStore"
 import { DB_VERSION, createSeed } from "./seed"
-import { ApiError, READ_METHODS, createService, type Context, type PublicMethod, type Service } from "./service"
+import { ApiError, READ_METHODS, createService, type Context, type PublicMethod, type Service, type SubscriptionInfo, type Subscriptions } from "./service"
 import type { DB, Session } from "./types"
 
 export { ApiError }
@@ -122,6 +122,48 @@ const localContext: Context = {
   baseUrl: typeof window === "undefined" ? "" : window.location.href.split("#")[0],
   messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
   online: () => typeof navigator === "undefined" || navigator.onLine !== false,
+  subscriptions: previewSubscriptions(),
+}
+
+/** Preview: Mercado Pago is simulated. The card is "entered" right away and the first month is charged. */
+function previewSubscriptions(): Subscriptions {
+  const read = (id: string) => {
+    try {
+      return JSON.parse(localStorage.getItem(`loyaloop-sub-${id}`) || "null") as SubscriptionInfo | null
+    } catch {
+      return null
+    }
+  }
+  const save = (info: SubscriptionInfo) => {
+    try {
+      localStorage.setItem(`loyaloop-sub-${info.id}`, JSON.stringify(info))
+    } catch {
+      /* private mode: the subscription lives for this page only */
+    }
+  }
+  return {
+    async create(input) {
+      const id = `sim_${Math.random().toString(36).slice(2, 10)}`
+      const at = new Date(clock()).toISOString()
+      save({ id, status: "authorized", externalReference: input.externalReference, amount: input.amount, payerEmail: input.payerEmail, lastChargeAt: at })
+      return { id, url: "#/panel/plan?pago=1" }
+    },
+    async get(id) {
+      const info = read(id)
+      if (!info) throw new Error("Suscripción simulada no encontrada")
+      return info
+    },
+    async update(id, change) {
+      const info = read(id)
+      if (!info) return
+      if (change.amount) info.amount = change.amount
+      if (change.status) info.status = change.status
+      save(info)
+    },
+    async charge(id) {
+      return { id, subscriptionId: id, status: "approved", amount: 0, at: new Date(clock()).toISOString() }
+    },
+  }
 }
 
 const localService = createService(
@@ -243,6 +285,10 @@ export const demoVisit = method("demoVisit")
 export const demoCard = method("demoCard")
 export const signupBusiness = method("signupBusiness")
 export const saveCard = method("saveCard")
+export const billing = method("billing")
+export const startSubscription = method("startSubscription")
+export const refreshBilling = method("refreshBilling")
+export const cancelSubscription = method("cancelSubscription")
 export const sendCode = method("sendCode")
 export const completeRegistration = method("completeRegistration")
 export const recoverCard = method("recoverCard")

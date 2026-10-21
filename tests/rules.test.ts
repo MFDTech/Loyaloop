@@ -318,6 +318,81 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("automatic monthly charge", () => {
+      const signup = { ownerName: "Ana López", businessName: "Panadería Sol", sector: "Café o restaurante", email: "ana@sol.test", password: "segura123", terms: true }
+      const subId = async () => (await api.billing()).billing!.subscriptionId
+
+      it("opens the card when Mercado Pago charges the first month", async () => {
+        await api.logout()
+        await api.signupBusiness(signup)
+        const code = (await api.bundle()).branches[0].code
+        const plan = await api.billing()
+        expect(plan).toMatchObject({ plan: "starter", amount: 390, status: "pending", available: true })
+        const { url } = await api.startSubscription("ana.mp@sol.test")
+        expect(url).toContain("mercadopago")
+        expect(h.mp.created.at(-1)).toMatchObject({ payerEmail: "ana.mp@sol.test", amount: 390, backUrl: "http://localhost/api/billing/return" })
+        // Back from Mercado Pago before entering the card: still waiting.
+        expect((await api.refreshBilling()).status).toBe("pending")
+        await expect(api.registration(code)).rejects.toThrow(/no está disponible/)
+        h.mp.pay(await subId(), new Date(t).toISOString())
+        const after = await api.refreshBilling()
+        expect(after.status).toBe("active")
+        expect(after.billing).toMatchObject({ status: "authorized", amount: 390 })
+        expect(after.billing!.paidUntil!.slice(0, 10)).toBe("2026-11-13")
+        expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+        await expect(api.startSubscription("ana.mp@sol.test")).rejects.toThrow(/ya está activo/)
+      })
+
+      it("records each charge from the notification and closes the card after the grace days if payments stop", async () => {
+        await api.logout()
+        await api.signupBusiness(signup)
+        const code = (await api.bundle()).branches[0].code
+        await api.startSubscription("ana@sol.test")
+        const id = await subId()
+        const first = h.mp.pay(id, new Date(t).toISOString())
+        await api.billingNotification("subscription_authorized_payment", first)
+        await api.billingNotification("subscription_authorized_payment", first)
+        expect((await api.billing()).charges).toHaveLength(1)
+        expect((await api.billing()).status).toBe("active")
+        // Next month the card is rejected; Mercado Pago keeps the old charge date.
+        advance(60 * 24 * 31)
+        const rejected = h.mp.pay(id, new Date(t).toISOString(), "rejected")
+        await api.billingNotification("subscription_authorized_payment", rejected)
+        expect((await api.billing()).charges.map((c) => c.status)).toEqual(["rejected", "approved"])
+        await api.tick()
+        expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+        advance(60 * 24 * 7)
+        await api.tick()
+        await expect(api.registration(code)).rejects.toThrow(/no está disponible/)
+        // A later successful retry opens it again.
+        h.mp.pay(id, new Date(t).toISOString())
+        await api.refreshBilling()
+        expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+      })
+
+      it("keeps the amount in step with branches and the agreed price, and lets the owner cancel", async () => {
+        await as("dueno@affair.test")
+        expect((await api.billing()).amount).toBe(990 + 250 * ((await api.bundle()).branches.length - 1))
+        await api.startSubscription("affair@pagos.test")
+        const id = await subId()
+        h.mp.pay(id, new Date(t).toISOString())
+        await api.refreshBilling()
+        const branches = (await api.bundle()).branches.length
+        await api.saveBranch({ name: "Sur", address: "" })
+        expect(h.mp.subs.get(id)!.amount).toBe(990 + 250 * branches)
+        await admin()
+        await api.adminUpdateBusiness("b_affair", { monthlyPrice: 1980 })
+        expect(h.mp.subs.get(id)!.amount).toBe(1980)
+        await as("dueno@affair.test")
+        const cancelled = await api.cancelSubscription()
+        expect(cancelled.billing!.status).toBe("cancelled")
+        expect(h.mp.subs.get(id)!.status).toBe("cancelled")
+        // Paid month still covered.
+        await api.tick()
+        expect((await api.billing()).status).not.toBe("pending")
+      })
+    })
+
     describe("registration", () => {
       it("names the business as responsible in its card's privacy notice", async () => {
         const before = await api.privacyNotice("AFF7Q2")

@@ -137,7 +137,7 @@ const FAQ: [string, string][] = [
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
   ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
-  ["¿Cómo empiezo con Starter?", "Creas tu cuenta en la página, pones tu logo, colores y recompensa, e imprimes el QR para tu mostrador. Nos escribes, te mandamos los datos de pago y activamos tu tarjeta el mismo día."],
+  ["¿Cómo empiezo con Starter?", "Creas tu cuenta en la página, pones tu logo, colores y recompensa, e imprimes el QR para tu mostrador. Pagas con tarjeta a través de Mercado Pago y tu tarjeta se activa al momento. Se cobra cada mes en automático y lo cancelas cuando quieras desde tu panel."],
   ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita. En Pro conectamos tu terminal de cobro y los puntos se suman solos según lo que pagan, sin que el cajero haga nada."],
 ]
 
@@ -582,7 +582,7 @@ export default function Landing() {
               <Button onClick={() => navigate("/empezar")}>
                 Crea tu cuenta <Icon name="arrow" size={16} />
               </Button>
-              <small>Diseñas tu tarjeta hoy y la activamos al confirmar tu pago.</small>
+              <small>Pagas con tarjeta desde tu panel y se activa al momento. Se cobra cada mes en automático y lo cancelas cuando quieras.</small>
             </article>
             <article className="ll-plan is-featured">
               <span className="ll-plan-tag">PUNTOS AUTOMÁTICOS</span>

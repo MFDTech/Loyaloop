@@ -16,7 +16,7 @@ const LOGIN_STORY = {
 const SIGNUP_STORY = {
   title: "Que tus clientes vuelvan, desde hoy.",
   text: "Una tarjeta de sellos con tu marca en el celular de tus clientes. Sin apps y sin tarjetas de cartón que se pierden.",
-  points: ["Lista en 5 minutos, la configuras tú", "Apple Wallet y Google Wallet", "Imprime tu QR y ponlo en el mostrador", "$390 al mes, sin plazo forzoso"],
+  points: ["Lista en 5 minutos, la configuras tú", "Apple Wallet y Google Wallet", "Imprime tu QR y ponlo en el mostrador", "$390 al mes en automático, cancela cuando quieras"],
 }
 
 function AuthLayout({ children, story = LOGIN_STORY }: { children: ReactNode; story?: typeof LOGIN_STORY }) {
@@ -138,7 +138,7 @@ export function Signup() {
       <form className="ll-auth-form" onSubmit={submit} noValidate>
         <div>
           <h2>Crea tu tarjeta de lealtad</h2>
-          <p>Plan Starter, $390 al mes. Crea tu cuenta y diseña tu tarjeta de sellos; la activamos en cuanto confirmes tu pago.</p>
+          <p>Plan Starter, $390 al mes. Crea tu cuenta, diseña tu tarjeta de sellos y actívala pagando con tarjeta desde tu panel.</p>
         </div>
         <Field label="Tu nombre" autoComplete="name" value={form.ownerName} onChange={(e) => set("ownerName", e.target.value)} required />
         <Field label="Nombre de tu negocio" autoComplete="organization" value={form.businessName} onChange={(e) => set("businessName", e.target.value)} hint="Así aparece en la tarjeta de tus clientes." required />

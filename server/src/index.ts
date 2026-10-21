@@ -10,6 +10,7 @@ import { hashPassword, verifyPassword } from "./passwords"
 import { createService } from "../../src/lib/service"
 import { purgeExpiredSessions } from "./sessions"
 import { createWallets } from "./wallet"
+import { mercadoPagoSubscriptions } from "./billing"
 import { AppleWallet, apnsPusher, loadAppleCredentials } from "./wallet/apple"
 import { GoogleWallet, loadServiceAccount } from "./wallet/google"
 
@@ -53,8 +54,13 @@ if (apple && !config.publicUrl.startsWith("https://")) console.warn("[aviso] App
 const wallets = createWallets(pool, google, apple)
 const stopWallets = wallets.start()
 
+const subscriptions = config.billingAccessToken ? mercadoPagoSubscriptions(config.billingAccessToken) : undefined
+if (subscriptions) console.log("[cobro] Pago automático con Mercado Pago activo")
+else console.warn("[aviso] Pago automático sin configurar (BILLING_MP_ACCESS_TOKEN): los negocios pagan por transferencia.")
+if (subscriptions && !config.billingWebhookSecret) console.warn("[aviso] Falta BILLING_MP_WEBHOOK_SECRET: los cobros se leen cada 12 horas y al volver de Mercado Pago.")
+
 const store = createPgStore(pool)
-const app = createApp({ pool, store, config, messenger, wallets })
+const app = createApp({ pool, store, config, messenger, wallets, subscriptions })
 
 // Server clock: daily rules (expirations, birthdays, «te extrañamos») and scheduled promotions.
 const system = createService(store, {
@@ -70,6 +76,7 @@ const system = createService(store, {
   baseUrl: config.publicUrl,
   messenger,
   wallets,
+  subscriptions,
 })
 let ticking = false
 const clock = setInterval(async () => {

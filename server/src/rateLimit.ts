@@ -40,6 +40,8 @@ export const LIMITS: Record<string, { ip: [number, number]; arg?: [number, numbe
   demoVisit: { ip: [40, 10 * MIN] },
   demoCard: { ip: [15, 10 * MIN] },
   signupBusiness: { ip: [3, 60 * MIN] },
+  startSubscription: { ip: [6, 60 * MIN] },
+  refreshBilling: { ip: [30, 10 * MIN] },
   privacyNotice: { ip: [120, 10 * MIN] },
   registration: { ip: [120, 10 * MIN] },
   submitLead: { ip: [5, 60 * MIN] },

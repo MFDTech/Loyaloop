@@ -9,7 +9,8 @@ import { migrate } from "../server/src/db"
 import { hashPassword, verifyPassword } from "../server/src/passwords"
 import { TABLES, createPgStore, importAll } from "../server/src/pgStore"
 import { validMercadoPagoSignature } from "../server/src/mercadopago"
-import { TEST_DATABASE_URL } from "./harness"
+import { TEST_DATABASE_URL, fakeMercadoPago, type FakeMercadoPago } from "./harness"
+import { mercadoPagoSubscriptions } from "../server/src/billing"
 
 const config: Config = {
   databaseUrl: TEST_DATABASE_URL,
@@ -21,6 +22,8 @@ const config: Config = {
   trustProxy: true,
   secureCookies: true,
   mercadoPagoWebhookSecret: "secreto-de-prueba",
+  billingAccessToken: "",
+  billingWebhookSecret: "secreto-de-cobros",
   googleWalletIssuerId: "",
   googleWalletKeyFile: "",
   resendApiKey: "",
@@ -47,6 +50,7 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
   let app: ReturnType<typeof createApp>
   const sent: { to: string; text: string }[] = []
   let ip = 0
+  let mp: FakeMercadoPago
 
   beforeAll(async () => {
     pool = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 4 })
@@ -59,7 +63,9 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
     for (const u of db.users) u.password = await hashPassword(u.password)
     await importAll(pool, db)
     sent.length = 0
+    mp = fakeMercadoPago()
     app = createApp({
+      subscriptions: mp,
       pool,
       store: createPgStore(pool),
       config,
@@ -184,6 +190,54 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
     expect((await post(sign("123", "r1"))).status).toBe(200)
     const events = (await pool.query("select business_id, external_id from webhook_events")).rows
     expect(events).toEqual([{ business_id: "b_affair", external_id: "123" }])
+  })
+
+  it("charges every month: checkout link, signed notifications and the way back", async () => {
+    const owner = await login("dueno@affair.test")
+    const start = await rpc("startSubscription", ["pagos@affair.test"], { cookie: owner })
+    expect(start.body.result.url).toMatch(/^https:\/\/mercadopago\.test\//)
+    expect(mp.created[0]).toMatchObject({ payerEmail: "pagos@affair.test", backUrl: "https://loyaloop.test/api/billing/return" })
+    const subscriptionId = (await rpc("billing", [], { cookie: owner })).body.result.billing.subscriptionId
+    const chargeId = mp.pay(subscriptionId, new Date().toISOString())
+    const ts = Math.floor(Date.now() / 1000)
+    const sign = (id: string, requestId: string, secret = config.billingWebhookSecret) => `ts=${ts},v1=${createHmac("sha256", secret).update(`id:${id};request-id:${requestId};ts:${ts};`).digest("hex")}`
+    const post = (signature: string) =>
+      app.request(`/api/webhooks/billing?data.id=${chargeId}&type=subscription_authorized_payment`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-signature": signature, "x-request-id": "r9" },
+        body: JSON.stringify({ type: "subscription_authorized_payment", data: { id: chargeId } }),
+      })
+    expect((await post(sign(chargeId, "r9", config.mercadoPagoWebhookSecret))).status).toBe(401)
+    expect((await post(sign(chargeId, "r9"))).status).toBe(200)
+    const plan = (await rpc("billing", [], { cookie: owner })).body.result
+    expect(plan.billing.status).toBe("authorized")
+    expect(plan.charges).toHaveLength(1)
+    expect(plan.status).toBe("active")
+    const back = await app.request("/api/billing/return?preapproval_id=x")
+    expect(back.status).toBe(302)
+    expect(back.headers.get("location")).toBe("/#/panel/plan?pago=1")
+  })
+
+  it("talks to Mercado Pago's subscription API", async () => {
+    const calls: { method: string; url: string; body?: string; auth?: string }[] = []
+    const fetcher = (async (url: string, init: RequestInit) => {
+      calls.push({ method: init.method!, url, body: init.body as string | undefined, auth: (init.headers as Record<string, string>).Authorization })
+      if (url.endsWith("/preapproval")) return new Response(JSON.stringify({ id: "2c93", init_point: "https://www.mercadopago.com.mx/subscriptions/checkout?preapproval_id=2c93" }), { status: 201 })
+      if (url.includes("/authorized_payments/")) return new Response(JSON.stringify({ id: 7, preapproval_id: "2c93", transaction_amount: 390, debit_date: "2026-11-13T10:00:00.000-04:00", payment: { status: "approved" } }))
+      if (init.method === "PUT") return new Response("{}")
+      if (url.endsWith("/preapproval/bad")) return new Response(JSON.stringify({ message: "not found" }), { status: 404 })
+      return new Response(JSON.stringify({ id: "2c93", status: "authorized", external_reference: "b_sol", auto_recurring: { transaction_amount: 390 }, next_payment_date: "2026-12-13T10:00:00.000-04:00", summarized: { last_charged_date: "2026-11-13T10:00:00.000-04:00" } }))
+    }) as unknown as typeof fetch
+    const api = mercadoPagoSubscriptions("APP_USR-prueba", fetcher)
+    const made = await api.create({ reason: "LoyaLoop Starter · Sol", externalReference: "b_sol", payerEmail: "ana@sol.test", amount: 390, backUrl: "https://loyaloop.test/api/billing/return" })
+    expect(made).toEqual({ id: "2c93", url: "https://www.mercadopago.com.mx/subscriptions/checkout?preapproval_id=2c93" })
+    expect(JSON.parse(calls[0].body!)).toMatchObject({ status: "pending", external_reference: "b_sol", auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: 390, currency_id: "MXN" } })
+    expect(calls[0].auth).toBe("Bearer APP_USR-prueba")
+    expect(await api.get("2c93")).toMatchObject({ status: "authorized", externalReference: "b_sol", amount: 390, lastChargeAt: "2026-11-13T10:00:00.000-04:00" })
+    expect(await api.charge("7")).toMatchObject({ id: "7", subscriptionId: "2c93", status: "approved", amount: 390 })
+    await api.update("2c93", { amount: 640 })
+    expect(JSON.parse(calls.at(-1)!.body!)).toEqual({ auto_recurring: { transaction_amount: 640, currency_id: "MXN" } })
+    await expect(api.get("bad")).rejects.toThrow(/404 not found/)
   })
 
   it("serializes concurrent scans and payments on one register", async () => {

@@ -92,6 +92,33 @@ Las invitaciones, el alta de un negocio y el cambio de contraseña se envían co
 3. Cuando el dominio diga **Verified**, crea una **API key** con permiso *Sending access* y ponla en `RESEND_API_KEY` en el `.env` del servidor.
 4. Opcional: en Cloudflare → **Email** → **Email Routing**, crea `hola@loyaloop.com.mx` reenviando a tu Gmail para recibir respuestas.
 
+## Cobro mensual con Mercado Pago (suscripciones)
+
+Los negocios pagan su plan con tarjeta desde **Plan y pagos** en su panel (`src/pages/business/Plan.tsx`). LoyaLoop crea una suscripción de Mercado Pago (`/preapproval`) en **la cuenta de Mercado Pago de LoyaLoop** y manda al dueño a la página de Mercado Pago a poner su tarjeta. Mercado Pago cobra ese día y después cada mes; el dinero llega a la cuenta de LoyaLoop.
+
+- Monto: Starter $390, Pro $990, +$250 por sucursal adicional, o el precio acordado que pongas en la ficha del negocio (admin). Si cambia, se actualiza en Mercado Pago para el siguiente cobro.
+- El primer cobro activa la tarjeta (estado «Por activar» o «En prueba» → «Activo»).
+- Si un cobro falla, Mercado Pago reintenta y al dueño le llega un correo. 7 días después de terminar el mes pagado, la tarjeta vuelve a «Por activar» hasta que pague.
+- El dueño cancela desde su panel; la tarjeta funciona hasta que termina el mes pagado.
+- Los negocios sin pago automático (por ejemplo, los que pagan por transferencia) no se tocan.
+- Nos enteramos de tres formas: al volver de Mercado Pago (`/api/billing/return`), por la notificación (`/api/webhooks/billing`) y releyendo cada suscripción cada 12 horas.
+
+Configurarlo:
+
+1. En [mercadopago.com.mx/developers/panel](https://www.mercadopago.com.mx/developers/panel), con la cuenta de LoyaLoop, **Crear aplicación** → nombre «LoyaLoop cobros» → producto **Suscripciones**.
+2. En la aplicación → **Credenciales de producción** → copia el **Access token** (`APP_USR-…`). Mercado Pago puede pedir datos del negocio para activarlas.
+3. **Webhooks** → **Configurar notificaciones** → URL de producción `https://loyaloop.com.mx/api/webhooks/billing` → eventos **Planes y suscripciones** (pagos recurrentes y vinculación de suscripciones) → guarda y copia la **clave secreta**.
+4. En el servidor, sin pegarlos en el chat:
+   ```
+   cd ~/loyaloop
+   read -rsp "Access token: " T && echo && sed -i "/^BILLING_MP_ACCESS_TOKEN=/d" .env && echo "BILLING_MP_ACCESS_TOKEN=$T" >> .env
+   read -rsp "Clave secreta: " S && echo && sed -i "/^BILLING_MP_WEBHOOK_SECRET=/d" .env && echo "BILLING_MP_WEBHOOK_SECRET=$S" >> .env
+   unset T S && docker compose up -d
+   ```
+5. El registro del servidor debe decir `[cobro] Pago automático con Mercado Pago activo`.
+
+Para probar con dinero ficticio usa las credenciales de prueba y dos **cuentas de prueba** (vendedor y comprador) de Mercado Pago; el correo que el dueño escribe debe ser el de la cuenta con la que entra a pagar.
+
 ## Apple Wallet
 
 **Cómo funciona.** Al registrarse o recuperar la tarjeta, el cliente recibe el enlace `https://<dominio>/api/apple/download/<cliente>?t=<token>`. Safari abre el archivo `.pkpass` y muestra «Agregar». El pase se arma en el momento: `pass.json` (saldo, nivel, QR con el token del cliente, reglas al reverso), ícono y logo del negocio, y en tarjetas de sellos una franja con los sellos dibujados. Se firma con el certificado *Pass Type ID* (más el intermedio WWDR de Apple).

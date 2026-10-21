@@ -10,6 +10,9 @@ import { DEMO_BUSINESS_ID, DEMO_CODE, DEMO_RETENTION_DAYS, defaultProgram, demoB
 import type {
   Campaign,
   AuditEntry,
+  Billing,
+  BillingCharge,
+  SubscriptionStatus,
   Branch,
   Business,
   CardType,
@@ -120,6 +123,36 @@ export interface Wallets {
   links(businessId: string, customerId: string): Promise<WalletLinks>
 }
 
+/** A monthly subscription as the payment provider reports it. */
+export interface SubscriptionInfo {
+  id: string
+  status: SubscriptionStatus
+  /** Our business id, sent when the subscription was created. */
+  externalReference: string
+  amount: number
+  payerEmail: string
+  lastChargeAt?: string
+  nextChargeAt?: string
+}
+
+/** One monthly charge of a subscription. */
+export interface SubscriptionCharge {
+  id: string
+  subscriptionId: string
+  status: BillingCharge["status"]
+  amount: number
+  at: string
+}
+
+/** Automatic monthly charges to businesses (Mercado Pago subscriptions, LoyaLoop's own account). */
+export interface Subscriptions {
+  /** Creates a subscription waiting for the payer's card; `url` is Mercado Pago's checkout. */
+  create(input: { reason: string; externalReference: string; payerEmail: string; amount: number; backUrl: string }): Promise<{ id: string; url: string }>
+  get(id: string): Promise<SubscriptionInfo>
+  update(id: string, change: { amount?: number; status?: "cancelled" }): Promise<void>
+  charge(id: string): Promise<SubscriptionCharge>
+}
+
 export interface Context {
   now(): number
   session(): Promise<Session | null>
@@ -137,6 +170,8 @@ export interface Context {
   messenger: Messenger
   /** Issues real passes (server only). */
   wallets?: Wallets
+  /** Charges businesses every month. Without it, LoyaLoop charges by hand. */
+  subscriptions?: Subscriptions
   online?(): boolean
 }
 
@@ -382,7 +417,30 @@ export function validateProgram(p: Omit<Program, "businessId">) {
   }
 }
 
-/** Free days for businesses that sign up alone, and days the card keeps working after that. */
+/** Monthly prices in MXN, as the website shows them. */
+export const PRICES = { starter: 390, pro: 990, extraBranch: 250 } as const
+/** Days a card keeps working after the paid month ends while Mercado Pago retries the charge. */
+export const BILLING_GRACE_DAYS = 7
+/** How often the server re-reads each subscription, in case a notification was lost. */
+const BILLING_CHECK_HOURS = 12
+
+/** The monthly price of a business: the agreed one, or its plan plus extra branches. */
+export function monthlyAmount(business: Pick<Business, "plan" | "monthlyPrice">, branches: number) {
+  if (typeof business.monthlyPrice === "number" && business.monthlyPrice > 0) return business.monthlyPrice
+  return PRICES[business.plan || "pro"] + PRICES.extraBranch * Math.max(0, branches - 1)
+}
+
+function addMonth(at: string) {
+  const d = new Date(at)
+  const day = d.getUTCDate()
+  d.setUTCMonth(d.getUTCMonth() + 1)
+  if (d.getUTCDate() < day) d.setUTCDate(0)
+  return d.toISOString()
+}
+
+function systemAudit(db: DB, businessId: string, action: string, detail: string, at: number) {
+  db.audit.unshift({ id: uid("a_"), businessId, actorId: "system", actorName: "Cobro automático", action, detail, impersonated: false, createdAt: new Date(at).toISOString() })
+}
 
 const text = (value: unknown, max = 500) => (typeof value === "string" ? value.trim().slice(0, max) : "")
 
@@ -459,13 +517,20 @@ export function createService(store: Store, ctx: Context) {
 
   // ------------------------------------------------------------ session
 
+  /** Payment details are for the owner (and LoyaLoop) only. */
+  function forRole(business: Business | undefined, role: Role) {
+    if (!business || role === "owner" || role === "admin") return business
+    const { billing, charges: _c, ...rest } = business
+    return { ...rest, billing: billing ? { ...billing, payerEmail: "", subscriptionId: "" } : undefined }
+  }
+
   async function me(): Promise<Me | null> {
     try {
       const a = await actor()
       return {
         user: publicUser(a.user),
         role: a.role,
-        business: a.businessId ? await store.business(a.businessId) : undefined,
+        business: a.businessId ? forRole(await store.business(a.businessId), a.role) : undefined,
         impersonating: a.impersonated,
       }
     } catch {
@@ -582,7 +647,8 @@ export function createService(store: Store, ctx: Context) {
   async function bundle(): Promise<Bundle> {
     const a = await inBusiness(["owner", "manager", "cashier"])
     await maintain(a.businessId)
-    return bundleOf(await store.read(B(a.businessId)), a.businessId)
+    const bundle = bundleOf(await store.read(B(a.businessId)), a.businessId)
+    return { ...bundle, business: forRole(bundle.business, a.role)! }
   }
 
   async function customerRows(a: Actor & { businessId: string }, db: DB): Promise<CustomerRow[]> {
@@ -750,7 +816,7 @@ export function createService(store: Store, ctx: Context) {
 
   async function saveBranch(input: { id?: string; name: string; address: string }) {
     const a = await inBusiness(["owner"])
-    return store.write(B(a.businessId), (db) => {
+    const saved = await store.write(B(a.businessId), (db) => {
       const name = text(input.name, 80)
       if (!name) throw new ApiError("Escribe el nombre de la sucursal.")
       if (input.id) {
@@ -769,6 +835,8 @@ export function createService(store: Store, ctx: Context) {
       audit(db, a, a.businessId, "Creó una sucursal", branch.name, now())
       return branch
     })
+    if (!input.id) await pushAmount(a.businessId).catch((error) => console.error("[cobro]", (error as Error).message))
+    return saved
   }
 
   async function deleteBranch(id: string) {
@@ -785,6 +853,7 @@ export function createService(store: Store, ctx: Context) {
       db.branches = db.branches.filter((b) => b.id !== id)
       audit(db, a, a.businessId, "Eliminó una sucursal", branch.name, now())
     })
+    await pushAmount(a.businessId).catch((error) => console.error("[cobro]", (error as Error).message))
   }
 
   async function saveRegister(input: { id?: string; name: string; branchId: string }) {
@@ -1040,6 +1109,7 @@ export function createService(store: Store, ctx: Context) {
             }
         })
     }
+    await billingTick(global.businesses.filter((b) => b.billing))
     for (const business of global.businesses.filter((b) => b.status !== "paused")) {
       await maintain(business.id)
       const db = await store.read(B(business.id))
@@ -1213,13 +1283,15 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail" | "plan">> & { trialDays?: number }) {
+  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail" | "plan">> & { trialDays?: number; monthlyPrice?: number | null }) {
     const a = await asAdmin()
     const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone", "legalName", "legalAddress", "privacyEmail", "plan"] as const
     const patch: Record<string, unknown> = {}
     for (const key of allowed) if (input[key] !== undefined) patch[key] = input[key]
     if (patch.askPhone !== undefined) patch.askPhone = !!patch.askPhone
     if (patch.plan !== undefined && !["starter", "pro"].includes(String(patch.plan))) throw new ApiError("Plan no válido.")
+    const price = input.monthlyPrice === undefined ? undefined : input.monthlyPrice === null || Number(input.monthlyPrice) === 0 ? null : Math.round(Number(input.monthlyPrice))
+    if (price !== undefined && price !== null && !(price >= 50 && price <= 100000)) throw new ApiError("El precio mensual debe estar entre $50 y $100,000.")
     if (patch.legalName !== undefined) patch.legalName = text(patch.legalName, 160)
     if (patch.legalAddress !== undefined) patch.legalAddress = text(patch.legalAddress, 300)
     if (patch.privacyEmail !== undefined) {
@@ -1240,9 +1312,12 @@ export function createService(store: Store, ctx: Context) {
       if (!business) throw new ApiError("El negocio no existe.")
       Object.assign(business, patch)
       if (business.trialEndsAt === undefined) delete business.trialEndsAt
+      if (price === null) delete business.monthlyPrice
+      else if (price !== undefined) business.monthlyPrice = price
       if (business.discreet) business.locationAlerts = false
-      audit(db, a, businessId, trialDays ? `Le dio una prueba de ${trialDays} días` : input.status ? `Cambió el estado a ${input.status}` : "Editó los datos del negocio", "", now())
+      audit(db, a, businessId, trialDays ? `Le dio una prueba de ${trialDays} días` : input.status ? `Cambió el estado a ${input.status}` : price !== undefined ? "Cambió el precio mensual" : "Editó los datos del negocio", price ? `$${price}` : "", now())
     })
+    if (price !== undefined || patch.plan !== undefined) await pushAmount(businessId)
   }
 
   async function adminSetIntegration(businessId: string, provider: Provider, status: "connected" | "not_connected") {
@@ -1408,13 +1483,13 @@ export function createService(store: Store, ctx: Context) {
       heading: `Bienvenido a LoyaLoop, ${ownerName.split(" ")[0]}`,
       paragraphs: [
         `Creamos la tarjeta de sellos de ${name}. En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.`,
-        "Para activarla, responde a este correo o escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago del plan Starter ($390 al mes). En cuanto se active, tus clientes pueden registrarse.",
+        "Para activarla, entra a «Plan y pagos» y paga con tarjeta a través de Mercado Pago ($390 al mes en automático). En cuanto se cobre, tus clientes pueden registrarse.",
       ],
       action: { label: "Entrar a mi panel", url: link("#/panel") },
     })
     const admins = (await store.read("global")).users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
     for (const to of admins)
-      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, "Está por activar: actívalo o dale una prueba desde su ficha."], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
+      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, "Está por activar: se activa solo cuando pague desde su panel, o dale una prueba desde su ficha."], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
     return (await me())!
   }
 
@@ -1441,6 +1516,189 @@ export function createService(store: Store, ctx: Context) {
       const current = db.programs[index]
       db.programs[index] = { messages: current?.messages, missYouDays: current?.missYouDays, ...program, businessId: a.businessId }
       audit(db, a, a.businessId, "Actualizó el diseño y las reglas de su tarjeta", "", now())
+    })
+  }
+
+  // ------------------------------------------------------------ automatic monthly charge
+
+  /** What the owner sees in «Plan y pagos». */
+  async function billing() {
+    const a = await inBusiness(["owner"])
+    const db = await store.read(B(a.businessId))
+    const business = db.businesses.find((b) => b.id === a.businessId)!
+    const branches = db.branches.filter((b) => b.businessId === a.businessId).length
+    const owner = db.users.find((u) => u.businessId === a.businessId && u.role === "owner" && u.active)
+    return {
+      plan: business.plan || "pro",
+      status: business.status,
+      amount: monthlyAmount(business, branches),
+      branches,
+      custom: typeof business.monthlyPrice === "number" && business.monthlyPrice > 0,
+      trialEndsAt: business.trialEndsAt,
+      billing: business.billing,
+      charges: (business.charges || []).slice(0, 12),
+      available: !!ctx.subscriptions,
+      ownerEmail: owner?.email || business.email,
+    }
+  }
+
+  /** Starts the monthly charge: returns Mercado Pago's page where the owner enters the card. */
+  async function startSubscription(payerEmail: string): Promise<{ url: string }> {
+    const a = await inBusiness(["owner"])
+    if (!ctx.subscriptions) throw new ApiError("El pago automático aún no está disponible. Escríbenos a hola@loyaloop.com.mx y te ayudamos a pagar.", "unavailable")
+    const email = text(payerEmail, 200).toLowerCase()
+    if (!isEmail(email)) throw new ApiError("Escribe el correo de tu cuenta de Mercado Pago.")
+    const db = await store.read(B(a.businessId))
+    const business = db.businesses.find((b) => b.id === a.businessId)!
+    if (business.billing?.status === "authorized") throw new ApiError("Tu pago automático ya está activo.", "conflict")
+    const amount = monthlyAmount(business, db.branches.filter((b) => b.businessId === a.businessId).length)
+    const plan = business.plan === "starter" ? "Starter" : "Pro"
+    const created = await ctx.subscriptions.create({
+      reason: `LoyaLoop ${plan} · ${business.name}`.slice(0, 120),
+      externalReference: business.id,
+      payerEmail: email,
+      amount,
+      backUrl: `${ctx.baseUrl}api/billing/return`,
+    })
+    await store.write(B(a.businessId), (d) => {
+      const b = d.businesses.find((x) => x.id === a.businessId)!
+      b.billing = { provider: "mercadopago", subscriptionId: created.id, status: "pending", amount, payerEmail: email, paidUntil: b.billing?.paidUntil, checkedAt: iso(), createdAt: iso() }
+      audit(d, a, a.businessId, "Inició el pago automático", `$${amount} al mes · ${email}`, now())
+    })
+    return { url: created.url }
+  }
+
+  /** Reads the subscription again (the owner just came back from Mercado Pago). */
+  async function refreshBilling() {
+    const a = await inBusiness(["owner"])
+    const business = await store.business(a.businessId)
+    if (business?.billing && ctx.subscriptions) await syncSubscription(business.billing.subscriptionId).catch((error) => console.error("[cobro]", (error as Error).message))
+    return billing()
+  }
+
+  /** Stops future charges. The card keeps working until the paid month ends. */
+  async function cancelSubscription() {
+    const a = await inBusiness(["owner"])
+    const business = await store.business(a.businessId)
+    if (!business?.billing || business.billing.status === "cancelled") throw new ApiError("No tienes un pago automático activo.")
+    if (ctx.subscriptions) await ctx.subscriptions.update(business.billing.subscriptionId, { status: "cancelled" })
+    await store.write(B(a.businessId), (db) => {
+      const b = db.businesses.find((x) => x.id === a.businessId)!
+      if (b.billing) b.billing.status = "cancelled"
+      audit(db, a, a.businessId, "Canceló el pago automático", b.billing?.paidUntil ? `Pagado hasta ${b.billing.paidUntil.slice(0, 10)}` : "", now())
+    })
+    const admins = await adminEmails()
+    for (const to of admins) await sendEmail({ to, subject: `Canceló su pago automático: ${business.name}`, heading: "Un negocio canceló su suscripción", paragraphs: [`${business.name} canceló el cobro mensual.`, business.billing.paidUntil ? `Su tarjeta funciona hasta el ${business.billing.paidUntil.slice(0, 10)}.` : "No tenía meses pagados."] })
+    return billing()
+  }
+
+  async function adminEmails() {
+    return (await store.read("global")).users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
+  }
+
+  /** Brings a subscription's state from Mercado Pago into the business and opens or closes its card. */
+  async function syncSubscription(subscriptionId: string) {
+    if (!ctx.subscriptions) return
+    const info = await ctx.subscriptions.get(subscriptionId)
+    const business = info.externalReference ? await store.business(info.externalReference) : undefined
+    if (!business || business.billing?.subscriptionId !== info.id) return
+    const result = await store.write(B(business.id), (db) => {
+      const b = db.businesses.find((x) => x.id === business.id)!
+      const billing = b.billing as Billing
+      const before = { status: billing.status, business: b.status }
+      billing.status = info.status
+      billing.amount = info.amount || billing.amount
+      billing.nextChargeAt = info.nextChargeAt
+      if (info.lastChargeAt) {
+        billing.lastChargeAt = info.lastChargeAt
+        const until = addMonth(info.lastChargeAt)
+        if (!billing.paidUntil || until > billing.paidUntil) billing.paidUntil = until
+      }
+      billing.checkedAt = iso()
+      const covered = !billing.paidUntil || new Date(billing.paidUntil).getTime() + BILLING_GRACE_DAYS * DAY > now()
+      // Paid: a card waiting for activation or on trial opens. A business LoyaLoop paused stays paused.
+      if (info.status === "authorized" && covered && (b.status === "pending" || b.status === "trial")) {
+        b.status = "active"
+        delete b.trialEndsAt
+        systemAudit(db, b.id, "Activó la cuenta con el pago automático", `$${billing.amount} al mes`, now())
+      }
+      if (before.status !== billing.status) systemAudit(db, b.id, `Pago automático: ${billing.status}`, "", now())
+      const owner = db.users.find((u) => u.businessId === b.id && u.role === "owner" && u.active)
+      return { activated: before.business !== "active" && b.status === "active", name: b.name, owner: owner?.email, amount: billing.amount }
+    })
+    if (result.activated) {
+      if (result.owner)
+        await sendEmail({ to: result.owner, subject: "Tu tarjeta de lealtad ya está activa", heading: "¡Listo! Tu tarjeta está activa", paragraphs: [`Recibimos tu pago. Desde ahora tus clientes pueden registrarse en ${result.name}.`, `Cada mes se cobran $${result.amount} a tu tarjeta en automático. Puedes cancelarlo cuando quieras desde «Plan y pagos».`], action: { label: "Entrar a mi panel", url: link("#/panel") } })
+      for (const to of await adminEmails()) await sendEmail({ to, subject: `Pago recibido: ${result.name}`, heading: "Un negocio activó su pago automático", paragraphs: [`${result.name} · $${result.amount} al mes.`] })
+    }
+  }
+
+  /** A Mercado Pago notification about subscriptions (server only, signature already checked). */
+  async function billingNotification(topic: string, id: string) {
+    if (!ctx.subscriptions || !id) return
+    if (topic === "subscription_preapproval" || topic === "preapproval") return syncSubscription(id)
+    if (topic !== "subscription_authorized_payment" && topic !== "authorized_payment") return
+    const charge = await ctx.subscriptions.charge(id)
+    const info = await ctx.subscriptions.get(charge.subscriptionId)
+    const business = info.externalReference ? await store.business(info.externalReference) : undefined
+    if (!business || business.billing?.subscriptionId !== info.id) return
+    const isNew = await store.write(B(business.id), (db) => {
+      const b = db.businesses.find((x) => x.id === business.id)!
+      const charges = b.charges || []
+      const existing = charges.find((c) => c.id === charge.id)
+      if (existing) {
+        const changed = existing.status !== charge.status
+        existing.status = charge.status
+        return changed && charge.status === "rejected"
+      }
+      b.charges = [{ id: charge.id, amount: charge.amount, status: charge.status, at: charge.at }, ...charges].slice(0, 24)
+      if (charge.status === "approved") systemAudit(db, b.id, "Cobro mensual aprobado", `$${charge.amount}`, now())
+      if (charge.status === "rejected") systemAudit(db, b.id, "Cobro mensual rechazado", `$${charge.amount}`, now())
+      return charge.status === "rejected"
+    })
+    await syncSubscription(info.id)
+    if (isNew) {
+      const owner = (await store.read(B(business.id))).users.find((u) => u.businessId === business.id && u.role === "owner" && u.active)
+      if (owner)
+        await sendEmail({ to: owner.email, subject: "No pudimos cobrar tu mensualidad", heading: "Revisa tu tarjeta en Mercado Pago", paragraphs: [`Mercado Pago no pudo cobrar los $${charge.amount} de este mes y lo intentará de nuevo en los próximos días.`, `Si tu tarjeta venció o no tiene saldo, cámbiala en Mercado Pago. Tu tarjeta de lealtad sigue funcionando ${BILLING_GRACE_DAYS} días después de terminar tu mes pagado.`], action: { label: "Ver mi plan", url: link("#/panel/plan") } })
+    }
+  }
+
+  /** Server clock: re-read subscriptions now and then, and close cards whose paid month ran out. */
+  async function billingTick(businesses: Business[]) {
+    for (const business of businesses) {
+      const billing = business.billing
+      if (!billing) continue
+      if (ctx.subscriptions && billing.status !== "cancelled" && now() - new Date(billing.checkedAt).getTime() > BILLING_CHECK_HOURS * 60 * MINUTE)
+        await syncSubscription(billing.subscriptionId).catch((error) => console.error("[cobro]", business.id, (error as Error).message))
+      const fresh = await store.business(business.id)
+      // Authorized but never charged: it had until the subscription started.
+      const paidUntil = fresh?.billing?.paidUntil ?? (fresh?.billing?.status === "authorized" ? fresh.billing.createdAt : undefined)
+      if (!fresh || fresh.status !== "active" || !paidUntil || new Date(paidUntil).getTime() + BILLING_GRACE_DAYS * DAY > now()) continue
+      const owner = await store.write(B(business.id), (db) => {
+        const b = db.businesses.find((x) => x.id === business.id)!
+        b.status = "pending"
+        systemAudit(db, b.id, "Cerró la tarjeta por falta de pago", `Pagado hasta ${paidUntil.slice(0, 10)}`, now())
+        return db.users.find((u) => u.businessId === b.id && u.role === "owner" && u.active)?.email
+      })
+      if (owner) await sendEmail({ to: owner, subject: "Tu tarjeta de lealtad se pausó", heading: "Tu tarjeta ya no acepta clientes nuevos", paragraphs: ["No recibimos el pago de tu mensualidad. Tus clientes y su historial siguen guardados.", "Activa de nuevo tu pago automático para que tu tarjeta vuelva a funcionar."], action: { label: "Activar mi pago", url: link("#/panel/plan") } })
+      for (const to of await adminEmails()) await sendEmail({ to, subject: `Tarjeta cerrada por falta de pago: ${business.name}`, heading: "Un negocio dejó de pagar", paragraphs: [`${business.name} estaba pagado hasta el ${paidUntil.slice(0, 10)}.`] })
+    }
+  }
+
+  /** Keeps the subscription amount in step with the plan, the agreed price and the number of branches. */
+  async function pushAmount(businessId: string) {
+    const db = await store.read(B(businessId))
+    const business = db.businesses.find((b) => b.id === businessId)
+    const billing = business?.billing
+    if (!business || !billing || billing.status === "cancelled" || !ctx.subscriptions) return
+    const amount = monthlyAmount(business, db.branches.filter((b) => b.businessId === businessId).length)
+    if (amount === billing.amount) return
+    await ctx.subscriptions.update(billing.subscriptionId, { amount })
+    await store.write(B(businessId), (d) => {
+      const b = d.businesses.find((x) => x.id === businessId)!
+      if (b.billing) b.billing.amount = amount
+      systemAudit(d, businessId, "Cambió el monto del pago automático", `$${billing.amount} → $${amount}`, now())
     })
   }
 
@@ -1971,20 +2229,27 @@ export function createService(store: Store, ctx: Context) {
     kioskScan,
     kioskScanStatus,
     kioskRedeem,
+    // plan and payments
+    billing,
+    startSubscription,
+    refreshBilling,
+    cancelSubscription,
     // server-only (not exposed over RPC)
     recordPayment,
+    billingNotification,
   }
 }
 
 export type Service = ReturnType<typeof createService>
 
-/** Methods the browser may call over HTTP. recordPayment (webhooks) and tick (server clock) are not here. */
+/** Methods the browser may call over HTTP. recordPayment and billingNotification (webhooks) and tick (server clock) are not here. */
 export const PUBLIC_METHODS = [
   "me", "login", "logout", "requestPasswordReset", "resetPassword", "invitation", "acceptInvitation", "changePassword", "impersonate", "stopImpersonating",
   "bundle", "customers", "customer", "adjustBalance", "exportCustomersCsv", "activity", "refundPurchase", "reviewQueue", "resolveReview",
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
+  "billing", "startSubscription", "refreshBilling", "cancelSubscription",
   "registration", "privacyNotice", "signupBusiness", "saveCard", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
@@ -1994,5 +2259,5 @@ export type PublicMethod = (typeof PUBLIC_METHODS)[number]
 /** Calls that only read: the browser does not need to refresh other views after them. */
 export const READ_METHODS = new Set<string>([
   "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "campaigns", "campaignAudience", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "privacyNotice", "kiosk", "kioskScanStatus",
+  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "privacyNotice", "kiosk", "kioskScanStatus", "billing",
 ])

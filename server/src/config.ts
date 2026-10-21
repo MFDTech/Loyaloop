@@ -14,6 +14,9 @@ export interface Config {
   trustProxy: boolean
   secureCookies: boolean
   mercadoPagoWebhookSecret: string
+  /** LoyaLoop's own Mercado Pago account, to charge businesses every month (subscriptions). */
+  billingAccessToken: string
+  billingWebhookSecret: string
   /** Google Wallet issuer id (Google Pay & Wallet Console) and service account key file. */
   googleWalletIssuerId: string
   googleWalletKeyFile: string
@@ -56,6 +59,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: flag(env.TRUST_PROXY, true),
     secureCookies: flag(env.SECURE_COOKIES, publicUrl.startsWith("https://")),
     mercadoPagoWebhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET || "",
+    billingAccessToken: env.BILLING_MP_ACCESS_TOKEN || "",
+    billingWebhookSecret: env.BILLING_MP_WEBHOOK_SECRET || "",
     googleWalletIssuerId: env.GOOGLE_WALLET_ISSUER_ID || "",
     googleWalletKeyFile: env.GOOGLE_WALLET_KEY_FILE || "",
     resendApiKey: env.RESEND_API_KEY || "",

@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit"
 import { deleteCookie, getCookie, setCookie } from "hono/cookie"
 import { getConnInfo } from "@hono/node-server/conninfo"
 import { serveStatic } from "@hono/node-server/serve-static"
-import { ApiError, PUBLIC_METHODS, createService, type Context, type Messenger, type Store } from "../../src/lib/service"
+import { ApiError, PUBLIC_METHODS, createService, type Context, type Messenger, type Store, type Subscriptions } from "../../src/lib/service"
 import type { Session } from "../../src/lib/types"
 import type { Config } from "./config"
 import type { Pool } from "./db"
@@ -11,6 +11,7 @@ import { hashPassword, verifyPassword } from "./passwords"
 import { LIMITS, RateLimiter } from "./rateLimit"
 import { SESSION_COOKIE, SESSION_DAYS, createSession, deleteSession, deleteUserSessions, findSession, updateSession } from "./sessions"
 import { mercadoPagoWebhook } from "./mercadopago"
+import { billingWebhook } from "./billing"
 import { appleRoutes } from "./wallet/appleRoutes"
 import type { WalletService } from "./wallet"
 import type { Business } from "../../src/lib/types"
@@ -53,9 +54,10 @@ export interface AppDeps {
   now?: () => number
   limiter?: RateLimiter
   wallets?: WalletService
+  subscriptions?: Subscriptions
 }
 
-export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets }: AppDeps) {
+export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets, subscriptions }: AppDeps) {
   const app = new Hono()
 
   app.use("*", async (c, next) => {
@@ -139,6 +141,7 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       baseUrl: config.publicUrl,
       messenger,
       wallets,
+      subscriptions,
     }
 
     const service = createService(store, ctx)
@@ -172,6 +175,25 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
   })
 
   app.post("/api/webhooks/mercadopago/:businessId", (c) => mercadoPagoWebhook(c, { pool, config }))
+
+  // Monthly charge: Mercado Pago notifications and the owner's way back from its checkout.
+  const system = createService(store, {
+    now,
+    session: async () => null,
+    setSession: async () => undefined,
+    device: () => null,
+    setDevice: () => undefined,
+    hash: hashPassword,
+    verify: verifyPassword,
+    preview: config.preview,
+    simulator: config.simulator,
+    baseUrl: config.publicUrl,
+    messenger,
+    wallets,
+    subscriptions,
+  })
+  app.post("/api/webhooks/billing", (c) => billingWebhook(c, config, (topic, id) => system.billingNotification(topic, id)))
+  app.get("/api/billing/return", (c) => c.redirect("/#/panel/plan?pago=1", 302))
 
   appleRoutes(app, wallets?.apple ?? null)
 

@@ -67,6 +67,8 @@ const config: Config = {
   trustProxy: true,
   secureCookies: false,
   mercadoPagoWebhookSecret: "",
+  billingAccessToken: "",
+  billingWebhookSecret: "",
   googleWalletIssuerId: "3388000000012345678",
   googleWalletKeyFile: "",
   resendApiKey: "",

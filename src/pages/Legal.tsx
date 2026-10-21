@@ -247,6 +247,10 @@ function LoyaloopNotice() {
         <h3>Con quién se comparten</h3>
         <p>No vendemos datos. Nos apoyamos en proveedores que los tratan por nuestra cuenta, algunos fuera de México:</p>
         <Providers />
+        <p>
+          Para el pago mensual usamos Mercado Pago: la tarjeta se captura en su página y la guarda Mercado Pago; LoyaLoop solo recibe el estado de cada cobro y el
+          correo de la cuenta que paga.
+        </p>
         <p>Solo entregaremos datos a una autoridad cuando una ley o una orden lo exija.</p>
         <Rights email={email} who={name} />
         <h3>Cookies y almacenamiento</h3>
@@ -288,12 +292,14 @@ function LoyaloopNotice() {
           </li>
           <li>
             <b>Activación y pruebas.</b> Una cuenta creada desde la página queda por activar: el negocio puede diseñar su tarjeta, pero los clientes no
-            pueden registrarse hasta que confirmemos el pago. Si acordamos un periodo de prueba, al terminar sin que se active el pago la tarjeta deja de
+            pueden registrarse hasta que se reciba el primer pago. Si acordamos un periodo de prueba, al terminar sin que se active el pago la tarjeta deja de
             registrar clientes nuevos y de sumar visitas; el negocio puede activarla después y conserva su configuración.
           </li>
           <li>
-            <b>Precio y pago.</b> Se paga por adelantado, cada mes o cada año según el plan; los impuestos que en su caso apliquen se suman al precio. Si un pago se atrasa más de 15 días,
-            avisamos y podemos suspender el servicio hasta que se regularice. Los cambios de precio se avisan con 30 días de anticipación.
+            <b>Precio y pago.</b> Se paga por adelantado, cada mes o cada año según el plan; los impuestos que en su caso apliquen se suman al precio. El pago mensual puede
+            hacerse en automático con tarjeta a través de Mercado Pago: al activarlo, el negocio autoriza un cargo cada mes, el mismo día, por el precio de su plan y sus
+            sucursales, hasta que lo cancele desde su panel. Si un cobro no pasa, Mercado Pago lo reintenta; si 7 días después de terminar el mes pagado no se ha cubierto,
+            la tarjeta deja de registrar clientes y de sumar visitas hasta que se pague. Los cambios de precio se avisan con 30 días de anticipación.
           </li>
           <li>
             <b>Cancelación.</b> El plan mensual no tiene plazo forzoso: se cancela cuando el negocio quiera y termina al final del periodo pagado. Los pagos anuales
