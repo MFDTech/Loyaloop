@@ -10,7 +10,8 @@ import type { DB, Session } from "./types"
 
 export { ApiError }
 export type * from "./service"
-export type { AuditEntry } from "./types"
+export type { AuditEntry, Campaign } from "./types"
+export type { Audience, AutomaticEvent, NoticeEvent } from "./notices"
 
 const API_URL: string | undefined = import.meta.env.VITE_API_URL
 export const SERVER_MODE = !!API_URL
@@ -134,6 +135,9 @@ const localService = createService(
   localContext,
 )
 
+// Preview without a server: the same clock runs in the browser.
+if (typeof window !== "undefined" && !import.meta.env.VITE_API_URL) setInterval(() => localService.tick().catch(() => undefined), 60_000)
+
 export function resetData() {
   cache = createSeed(clock())
   write(DB_KEY, JSON.stringify(cache))
@@ -240,6 +244,11 @@ export const recoverCard = method("recoverCard")
 export const submitLead = method("submitLead")
 
 export const pairDevice = method("pairDevice")
+export const saveNotices = method("saveNotices")
+export const campaigns = method("campaigns")
+export const campaignAudience = method("campaignAudience")
+export const createCampaign = method("createCampaign")
+export const cancelCampaign = method("cancelCampaign")
 export const kioskUnpair = method("kioskUnpair")
 export const kiosk = method("kiosk")
 export const kioskScan = method("kioskScan")

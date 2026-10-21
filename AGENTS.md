@@ -21,6 +21,7 @@ Este repositorio ya no se edita desde Figma Make: un push desde Figma sobrescrib
 - `src/lib/memoryStore.ts` — almacenamiento en memoria/localStorage; `server/src/pgStore.ts` — PostgreSQL
 - `src/lib/preview.ts` — `PREVIEW` muestra cuentas de prueba y el simulador; activo sin servidor o con `VITE_PREVIEW=true`
 - `server/src/` — `app.ts` (rutas, sesiones, límites), `migrations.ts` (esquema; nunca editar una migración ya aplicada), `cli.ts` (migrate, create-admin, seed-demo), `mercadopago.ts` (webhook), `wallet/` (Google y Apple Wallet: pases, servicio web de Apple, cola `wallet_jobs`)
+- `src/lib/notices.ts` — catálogo de avisos (textos por defecto, variables `{nombre}`…, cuáles aplican a cada tipo de tarjeta) y promociones; `tick()` del servicio corre cada minuto en el servidor (reglas diarias y promociones programadas)
 - `src/lib/seed.ts` — datos ficticios de ejemplo (Affair y Café La Esquina)
 - `src/pages/` — `Landing`, `Auth`, `Registration` (`#/r/<código>`, enlace de la etiqueta NFC), `Kiosk` (`#/caja`), `BusinessApp` (`#/panel/...`), `AdminApp` (`#/admin/...`), `Legal`
 - `src/components/` — `ui.tsx` (sistema de componentes), `Shell`, `Pass` (vista previa del pase), `Qr`, `VisitsChart`

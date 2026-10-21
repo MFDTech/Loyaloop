@@ -109,12 +109,12 @@ export interface Program {
   dailyLimit: number
   /** Alert when a card has more purchases than N × the average. 0 = off. */
   suspiciousFactor: number
-  notify: {
-    pointsEarned: boolean
-    rewardAvailable: boolean
-    tierChange: boolean
-    pointsExpiring: boolean
-  }
+  /** Which automatic notices are on. Missing keys use each notice's default. */
+  notify: Partial<Record<import("./notices").AutomaticEvent, boolean>>
+  /** The business's own text for each notice; empty uses the default. */
+  messages?: Partial<Record<import("./notices").AutomaticEvent, string>>
+  /** Days without a visit before «Te extrañamos». */
+  missYouDays?: number
 }
 
 export interface Reward {
@@ -152,6 +152,10 @@ export interface Customer {
   privacyAcceptedAt: string
   createdAt: string
   lastActivityAt: string
+  /** Year of the last birthday notice, so it is sent once. */
+  birthdayNoticeYear?: number
+  /** Last «Te extrañamos»; sent again only after a new visit. */
+  missYouAt?: string
 }
 
 export type TransactionKind =
@@ -224,8 +228,23 @@ export interface WalletNotice {
   id: string
   businessId: string
   customerId: string
-  event: "pointsEarned" | "rewardAvailable" | "tierChange" | "pointsExpiring"
+  event: import("./notices").NoticeEvent
   message: string
+  campaignId?: string
+  createdAt: string
+}
+
+/** A promotion sent now or scheduled by the business. */
+export interface Campaign {
+  id: string
+  businessId: string
+  message: string
+  audience: import("./notices").Audience
+  status: "scheduled" | "sent" | "canceled"
+  sendAt: string
+  sentAt?: string
+  recipients?: number
+  createdBy: string
   createdAt: string
 }
 
@@ -277,6 +296,7 @@ export interface DB {
   payments: Payment[]
   integrations: Integration[]
   notices: WalletNotice[]
+  campaigns: Campaign[]
   audit: AuditEntry[]
   leads: Lead[]
   verifications: { phone: string; businessId: string; code: string; attempts: number; expiresAt: string; sentAt: string }[]

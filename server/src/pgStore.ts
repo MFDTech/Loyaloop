@@ -46,6 +46,7 @@ export const TABLES: Record<Key, TableSpec> = {
   payments: spec("payments", "desc"),
   integrations: spec("integrations", "asc", { pk: (r) => `${r.businessId}:${r.provider}`, at: (r) => r.provider }),
   notices: spec("notices", "desc"),
+  campaigns: spec("campaigns", "desc", { at: (r) => r.sendAt ?? r.createdAt ?? "" }),
   audit: spec("audit", "desc"),
   leads: spec("leads", "desc", { business: () => null }),
   verifications: spec("verifications", "asc", { pk: (r) => `${r.businessId}:${r.phone}`, at: (r) => r.sentAt }),
@@ -92,6 +93,7 @@ async function loadScope(client: Client | Pool, scope: Scope, now: number): Prom
     async () => set("scans", await rows(client, "scans", "business_id = $1 and (at >= $2 or data->>'status' in ('pending', 'review'))", [id, since(1)])),
     async () => set("payments", await rows(client, "payments", "business_id = $1 and (at >= $2 or data->>'status' in ('unmatched', 'review'))", [id, since(1)])),
     async () => set("notices", await rows(client, "notices", "business_id = $1 and at >= $2", [id, since(60)])),
+    async () => set("campaigns", await rows(client, "campaigns", "business_id = $1 and (at >= $2 or data->>'status' = 'scheduled')", [id, since(120)])),
     async () => {
       const r = await client.query<{ data: { at: string } }>("select data from maintenance where pk = $1", [id])
       if (r.rows[0]) db.maintenance[id] = r.rows[0].data.at

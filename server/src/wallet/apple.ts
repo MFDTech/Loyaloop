@@ -89,13 +89,12 @@ export class AppleWallet {
     const stamps = program.type === "stamps"
     const tier = program.tiers.find((t) => t.id === customer.tierId)
     const earned = customer.earnedRewards.length
-    const notify = program.notify
     const balance = stamps
-      ? { key: "balance", label: "SELLOS", value: `${customer.stamps}/${program.stampGoal}`, ...(notify.pointsEarned ? { changeMessage: "Llevas %@ sellos" } : {}) }
-      : { key: "balance", label: "PUNTOS", value: customer.points, ...(notify.pointsEarned ? { changeMessage: "Ahora tienes %@ puntos" } : {}) }
+      ? { key: "balance", label: "SELLOS", value: `${customer.stamps}/${program.stampGoal}` }
+      : { key: "balance", label: "PUNTOS", value: customer.points }
     const secondary: object[] = [{ key: "member", label: "NOMBRE", value: customer.name }]
-    if (program.type === "tiers") secondary.push({ key: "tier", label: "NIVEL", value: tier?.name || program.tiers[0]?.name || "—", ...(notify.tierChange ? { changeMessage: "Subiste a nivel %@" } : {}) })
-    if (earned || stamps) secondary.push({ key: "earned", label: "POR CANJEAR", value: earned, ...(notify.rewardAvailable ? { changeMessage: "Tienes %@ recompensas para canjear" } : {}) })
+    if (program.type === "tiers") secondary.push({ key: "tier", label: "NIVEL", value: tier?.name || program.tiers[0]?.name || "—" })
+    if (earned || stamps) secondary.push({ key: "earned", label: "POR CANJEAR", value: earned })
     const back = backFields(card).map((f, i) => ({ key: `info_${i}`, label: f.label, value: f.value }))
     return {
       formatVersion: 1,
@@ -117,6 +116,7 @@ export class AppleWallet {
         ...(stamps ? {} : { primaryFields: [program.type === "tiers" ? { key: "level", label: "NIVEL", value: tier?.name || program.tiers[0]?.name || "—" } : { key: "points", label: "SALDO", value: `${customer.points} pts` }] }),
         secondaryFields: secondary,
         backFields: [
+          // The only field with a change message: the lock screen shows exactly the business's text.
           ...(input.notice ? [{ key: "notice", label: "Último aviso", value: input.notice.message, changeMessage: "%@" }] : []),
           ...back,
         ],

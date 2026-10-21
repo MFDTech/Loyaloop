@@ -105,7 +105,7 @@ describe("Apple Wallet pass building", () => {
     })
     expect(JSON.stringify(json)).not.toContain("Affair")
     expect(json.barcodes[0]).toMatchObject({ format: "PKBarcodeFormatQR", message: customer.token })
-    expect(json.storeCard.headerFields[0]).toMatchObject({ key: "balance", value: customer.points, changeMessage: "Ahora tienes %@ puntos" })
+    expect(json.storeCard.headerFields[0]).toEqual({ key: "balance", label: "PUNTOS", value: customer.points })
     expect(json.storeCard.secondaryFields.some((f) => (f as { key: string }).key === "tier")).toBe(true)
   })
 

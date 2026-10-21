@@ -232,4 +232,18 @@ create table apple_registrations (
 create index apple_registrations_serial on apple_registrations (serial);
 `,
   },
+  {
+    id: "005_campaigns",
+    sql: `
+-- Promotions sent or scheduled by each business.
+create table campaigns (
+  pk text primary key,
+  business_id text,
+  at text not null default '',
+  data jsonb not null
+);
+create index campaigns_business on campaigns (business_id, at);
+create index campaigns_scheduled on campaigns ((data->>'status')) where data->>'status' = 'scheduled';
+`,
+  },
 ]

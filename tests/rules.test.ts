@@ -262,6 +262,130 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("notices and promotions", () => {
+      const at = (local: string) => (t = new Date(`${local}-06:00`).getTime())
+
+      async function esquinaScanner() {
+        await as("dueno@laesquina.test")
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Tablet")
+      }
+
+      it("uses the business's own text with the customer's data", async () => {
+        await as("dueno@laesquina.test")
+        await expect(api.saveNotices({ notify: {}, messages: { stampEarned: "Vas en {nivel}" } })).rejects.toThrow(/\{nivel\}/)
+        await api.saveNotices({ notify: {}, messages: { stampEarned: "{nombre}: {sellos}/{meta}, te faltan {faltan}" } })
+        await esquinaScanner()
+        const c = (await api.customers()).find((x) => x.stamps < 6)!
+        await api.kioskScan(c.token)
+        const [last] = await api.notices()
+        expect(last.event).toBe("stampEarned")
+        expect(last.message).toBe(`${c.name.split(" ")[0]}: ${c.stamps + 1}/8, te faltan ${8 - c.stamps - 1}`)
+      })
+
+      it("says «te falta un sello» one stamp before the reward, and stays quiet when switched off", async () => {
+        await esquinaScanner()
+        const c = (await api.customers()).find((x) => x.stamps < 6)!
+        for (let i = c.stamps; i < 7; i++) {
+          advance(60 * 9)
+          await api.kioskScan(c.token)
+        }
+        expect((await api.notices())[0]).toMatchObject({ event: "almostThere", message: "¡Te falta un sello para Café americano gratis!" })
+        const before = (await api.notices()).length
+        await api.saveNotices({ notify: { stampEarned: false, almostThere: false, rewardAvailable: false }, messages: {} })
+        advance(60 * 9)
+        await api.kioskScan(c.token)
+        expect((await api.notices()).length).toBe(before)
+      })
+
+      it("welcomes new customers with the neutral name in discreet mode", async () => {
+        const sent = await api.sendCode("AFF7Q2", "5598761111", "new")
+        await api.completeRegistration("AFF7Q2", { name: "Ana López", phone: "5598761111", email: "", birthday: "", promotions: false, privacy: true }, sent.previewCode)
+        await as("dueno@affair.test")
+        const notices = await api.notices()
+        expect(notices.find((n) => n.event === "welcome")!.message).toBe("¡Bienvenido, Ana! Tu tarjeta de Club de beneficios ya está lista.")
+        expect(notices.some((n) => n.event === "tierChange")).toBe(false)
+      })
+
+      it("greets birthdays once, in the morning, from the server clock", async () => {
+        const sent = await api.sendCode("ESQR4M", "5598762222", "new")
+        await api.completeRegistration("ESQR4M", { name: "Beto Ruiz", phone: "5598762222", email: "", birthday: "10-14", promotions: false, privacy: true }, sent.previewCode)
+        at("2026-10-14T07:00:00")
+        await api.tick()
+        await as("dueno@laesquina.test")
+        expect((await api.notices()).some((n) => n.event === "birthday")).toBe(false)
+        at("2026-10-14T11:00:00")
+        await api.tick()
+        at("2026-10-14T13:00:00")
+        await api.tick()
+        const birthdays = (await api.notices()).filter((n) => n.event === "birthday")
+        expect(birthdays).toHaveLength(1)
+        const { program } = await api.bundle()
+        expect(birthdays[0].message).toBe(program.birthdayBonus > 0 ? "¡Feliz cumpleaños, Beto! Te regalamos un sello." : "¡Feliz cumpleaños, Beto! Te esperamos para celebrar.")
+      })
+
+      it("sends «te extrañamos» once until the customer comes back", async () => {
+        await as("dueno@laesquina.test")
+        await api.saveNotices({ notify: { missYou: true }, messages: { missYou: "{nombre}, ya son {dias} días" }, missYouDays: 30 })
+        await expect(api.saveNotices({ notify: {}, messages: {}, missYouDays: 3 })).rejects.toThrow(/7 y 365/)
+        at("2026-12-20T11:00:00")
+        await api.tick()
+        const first = (await api.notices()).filter((n) => n.event === "missYou")
+        expect(first.length).toBeGreaterThan(0)
+        expect(first[0].message).toMatch(/^\S+, ya son \d+ días$/)
+        at("2026-12-21T11:00:00")
+        await api.tick()
+        expect((await api.notices()).filter((n) => n.event === "missYou")).toHaveLength(first.length)
+      })
+
+      it("sends promotions only to customers who accepted them, personalized, two per day at most", async () => {
+        await as("dueno@affair.test")
+        const customers = await api.customers()
+        const optedIn = customers.filter((c) => c.promotionsOptIn)
+        expect(await api.campaignAudience({ kind: "all" })).toEqual({ count: optedIn.length, optedOut: customers.length - optedIn.length })
+        await expect(api.createCampaign({ message: "Hola {sellos} {regalo}", audience: { kind: "all" } })).rejects.toThrow(/\{regalo\}/)
+        const sent = await api.createCampaign({ message: "{nombre}, hoy tienes 2x1 en suites", audience: { kind: "all" } })
+        expect(sent).toMatchObject({ status: "sent", recipients: optedIn.length })
+        const promos = (await api.notices()).filter((n) => n.event === "promotion")
+        expect(promos).toHaveLength(optedIn.length)
+        expect(promos.every((n) => optedIn.some((c) => c.id === n.customerId))).toBe(true)
+        const one = promos[0]
+        expect(one.message).toBe(`${customers.find((c) => c.id === one.customerId)!.name.split(" ")[0]}, hoy tienes 2x1 en suites`)
+        await api.createCampaign({ message: "Segunda del día", audience: { kind: "inactive", days: 10 } })
+        await expect(api.createCampaign({ message: "Tercera", audience: { kind: "all" } })).rejects.toThrow(/2 promociones por día/)
+      })
+
+      it("sends scheduled promotions on time and never canceled ones", async () => {
+        await as("dueno@affair.test")
+        const program = (await api.bundle()).program
+        const later = await api.createCampaign({ message: "Fin de semana Oro", audience: { kind: "tier", tierId: program.tiers[program.tiers.length - 1].id }, sendAt: new Date("2026-10-17T10:00:00-06:00").toISOString() })
+        const canceled = await api.createCampaign({ message: "No sale", audience: { kind: "all" }, sendAt: new Date("2026-10-17T12:00:00-06:00").toISOString() })
+        expect(later.status).toBe("scheduled")
+        await api.cancelCampaign(canceled.id)
+        at("2026-10-17T09:59:00")
+        await api.tick()
+        expect((await api.campaigns()).find((c) => c.id === later.id)!.status).toBe("scheduled")
+        at("2026-10-17T12:30:00")
+        await api.tick()
+        const list = await api.campaigns()
+        expect(list.find((c) => c.id === later.id)).toMatchObject({ status: "sent" })
+        expect(list.find((c) => c.id === canceled.id)!.status).toBe("canceled")
+        expect((await api.notices()).some((n) => n.message === "No sale")).toBe(false)
+        await expect(api.cancelCampaign(later.id)).rejects.toThrow(/ya se envió/)
+      })
+
+      it("keeps promotions and notice settings to owners and managers, and admin edits keep the texts", async () => {
+        await as("cajero@affair.test")
+        await expect(api.createCampaign({ message: "x", audience: { kind: "all" } })).rejects.toThrow(/permiso/)
+        await as("gerente@affair.test")
+        await api.saveNotices({ notify: {}, messages: { pointsEarned: "+{ganados} pts" } })
+        await admin()
+        const { program } = await api.adminBundle("b_affair")
+        const { businessId: _b, messages: _m, ...rules } = program
+        await api.adminSaveProgram("b_affair", rules)
+        expect((await api.adminBundle("b_affair")).program.messages).toEqual({ pointsEarned: "+{ganados} pts" })
+      })
+    })
+
     describe("devices", () => {
       it("accepts a card in every branch of its business and never in another business", async () => {
         await as("dueno@laesquina.test")

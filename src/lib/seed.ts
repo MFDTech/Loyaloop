@@ -3,7 +3,7 @@
 import type { Customer, DB, Program, Transaction } from "./types"
 import { DAY, customerToken } from "./util"
 
-export const DB_VERSION = 3
+export const DB_VERSION = 4
 
 export const TEST_ACCOUNTS = [
   { email: "admin@loyaloop.test", password: "loyaloop123", label: "Administrador LoyaLoop" },
@@ -144,6 +144,7 @@ export function createSeed(now = Date.now()): DB {
       { businessId: "b_esquina", provider: "clip", status: "not_connected" },
     ],
     notices: [],
+    campaigns: [],
     audit: [
       { id: "a_1", businessId: "b_affair", actorId: "u_admin", actorName: "Miguel", action: "Configuró la tarjeta", detail: "Tipo Niveles con tres niveles", impersonated: false, createdAt: ago(90) },
       { id: "a_2", businessId: "b_affair", actorId: "u_admin", actorName: "Miguel", action: "Conectó Mercado Pago", detail: "Cuenta del negocio autorizada", impersonated: false, createdAt: ago(60) },

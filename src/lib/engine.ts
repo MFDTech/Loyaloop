@@ -2,6 +2,7 @@
 // same logic inside a database transaction when a scan or payment arrives.
 
 import type {
+  Campaign,
   Customer,
   DB,
   Device,
@@ -11,8 +12,8 @@ import type {
   Scan,
   Tier,
   Transaction,
-  WalletNotice,
 } from "./types"
+import { DEFAULT_MISS_YOU_DAYS, PROMOTION_VARS, noticeEnabled, noticeTemplate, renderNotice, type Audience, type AutomaticEvent, type NoticeEvent, type NoticeVar } from "./notices"
 import { DAY, MATCH_WINDOW_MS, int, normalizePhone, uid } from "./util"
 
 const iso = (now: number) => new Date(now).toISOString()
@@ -93,17 +94,41 @@ export function earnBlocked(db: DB, customer: Customer, now: number): string | n
   return null
 }
 
-function notice(db: DB, customer: Customer, event: WalletNotice["event"], message: string, now: number) {
+/** Records a notice for the customer's pass, with the business's own text. */
+function notice(db: DB, customer: Customer, event: AutomaticEvent, vars: Partial<Record<NoticeVar, string | number>>, now: number) {
   const program = programOf(db, customer.businessId)
-  if (!program.notify[event]) return
+  if (!noticeEnabled(program, event)) return
+  const message = renderNotice(noticeTemplate(program, event), { ...baseVars(db, customer, program), ...vars })
+  if (!message) return
+  pushNotice(db, customer, event, message, now)
+}
+
+function pushNotice(db: DB, customer: Customer, event: NoticeEvent, message: string, now: number, campaignId?: string) {
   db.notices.unshift({
     id: uid("n_"),
     businessId: customer.businessId,
     customerId: customer.id,
     event,
     message,
+    ...(campaignId ? { campaignId } : {}),
     createdAt: iso(now),
   })
+}
+
+/** Variables every notice can use. */
+function baseVars(db: DB, customer: Customer, program: Program): Partial<Record<NoticeVar, string | number>> {
+  const business = db.businesses.find((b) => b.id === customer.businessId)
+  const stampReward = db.rewards.find((r) => r.id === program.stampRewardId)
+  return {
+    nombre: customer.name.split(" ")[0] || customer.name,
+    negocio: business ? (business.discreet ? business.neutralName : business.name) : "",
+    puntos: int(customer.points),
+    sellos: customer.stamps,
+    meta: program.stampGoal,
+    faltan: Math.max(program.stampGoal - customer.stamps, 0),
+    nivel: program.tiers.find((t) => t.id === customer.tierId)?.name || "",
+    ...(stampReward ? { recompensa: stampReward.name } : {}),
+  }
 }
 
 function cheapestReward(db: DB, businessId: string): Reward | undefined {
@@ -125,13 +150,8 @@ export function recomputeTier(db: DB, customer: Customer, now: number) {
   const goingDown = (next?.threshold ?? -1) < (current?.threshold ?? -1)
   if (goingDown && !program.tierDowngrade) return
   customer.tierId = next?.id
-  notice(
-    db,
-    customer,
-    "tierChange",
-    next ? `Ahora eres nivel ${next.name}.` : "Tu nivel cambió.",
-    now,
-  )
+  // The first tier a new card gets is not news; moving up or down is.
+  if (next && current) notice(db, customer, "tierChange", { nivel: next.name }, now)
 }
 
 interface EarnContext {
@@ -151,15 +171,20 @@ function context(db: DB, ctx: EarnContext) {
   }
 }
 
-function addStamp(db: DB, customer: Customer, program: Program, now: number): number {
+function addStamp(db: DB, customer: Customer, program: Program, now: number, quiet = false): number {
   customer.stamps += 1
   if (program.stampGoal > 0 && customer.stamps >= program.stampGoal) {
     customer.stamps = 0
     if (program.stampRewardId) {
       customer.earnedRewards.push({ id: uid("er_"), rewardId: program.stampRewardId, createdAt: iso(now) })
       const reward = db.rewards.find((r) => r.id === program.stampRewardId)
-      notice(db, customer, "rewardAvailable", `Completaste tu tarjeta: ${reward?.name || "recompensa"} disponible.`, now)
+      notice(db, customer, "rewardAvailable", { recompensa: reward?.name || "tu recompensa" }, now)
     }
+  } else if (!quiet) {
+    const left = program.stampGoal - customer.stamps
+    // «Te falta un sello» replaces «Sello ganado» when it is on.
+    if (left === 1 && noticeEnabled(program, "almostThere")) notice(db, customer, "almostThere", {}, now)
+    else notice(db, customer, "stampEarned", {}, now)
   }
   return 1
 }
@@ -201,10 +226,10 @@ export function creditPayment(db: DB, scan: Scan, payment: Payment, now: number)
   scan.paymentId = payment.id
   payment.status = "matched"
   payment.scanId = scan.id
-  if (points > 0) notice(db, customer, "pointsEarned", `Ganaste ${int(points)} puntos. Saldo: ${int(customer.points)}.`, now)
+  if (points > 0) notice(db, customer, "pointsEarned", { ganados: int(points) }, now)
   const cheapest = cheapestReward(db, customer.businessId)
   if (usesPoints(program) && cheapest && before < cheapest.cost && customer.points >= cheapest.cost)
-    notice(db, customer, "rewardAvailable", `Ya puedes canjear ${cheapest.name}.`, now)
+    notice(db, customer, "rewardAvailable", { recompensa: cheapest.name }, now)
   recomputeTier(db, customer, now)
   return tx
 }
@@ -457,6 +482,12 @@ export function refund(db: DB, txId: string, reason: string, actorId: string | u
 }
 
 export function welcome(db: DB, customer: Customer, now: number): Transaction | null {
+  const tx = welcomeBonus(db, customer, now)
+  notice(db, customer, "welcome", {}, now)
+  return tx
+}
+
+function welcomeBonus(db: DB, customer: Customer, now: number): Transaction | null {
   const program = programOf(db, customer.businessId)
   if (!program.welcomeBonus) return null
   const stampsMode = !usesPoints(program)
@@ -478,9 +509,22 @@ export function welcome(db: DB, customer: Customer, now: number): Transaction | 
   return tx
 }
 
-const sameDay = (mmdd: string, now: number) => {
-  const d = new Date(now)
-  return mmdd === `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+/** Date and hour in Mexico City: birthdays and greetings follow the business's day, not the server's. */
+export function localTime(now: number, timeZone = "America/Mexico_City") {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" })
+      .formatToParts(new Date(now))
+      .map((p) => [p.type, p.value]),
+  )
+  return { year: Number(parts.year), mmdd: `${parts.month}-${parts.day}`, day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) }
+}
+
+const sameDay = (mmdd: string, now: number) => mmdd === localTime(now).mmdd
+
+/** Greetings go out in the morning or afternoon, never at night. */
+const greetingHour = (now: number) => {
+  const { hour } = localTime(now)
+  return hour >= 10 && hour < 20
 }
 
 /** Daily job: expirations, expiry warnings, birthday bonuses and tier review. */
@@ -510,11 +554,27 @@ export function runMaintenance(db: DB, businessId: string, now: number) {
           (n) => n.customerId === customer.id && n.event === "pointsExpiring" && time(n.createdAt) > time(customer.lastActivityAt),
         )
       ) {
-        notice(db, customer, "pointsExpiring", `Tus ${int(customer.points)} puntos vencen en menos de 30 días.`, now)
+        notice(db, customer, "pointsExpiring", {}, now)
       }
     }
+    const year = localTime(now).year
+    if (customer.birthday && sameDay(customer.birthday, now) && customer.birthdayNoticeYear !== year && greetingHour(now) && noticeEnabled(program, "birthday")) {
+      customer.birthdayNoticeYear = year
+      const gift = program.birthdayBonus > 0 ? (usesPoints(program) ? `${int(program.birthdayBonus)} puntos` : "un sello") : ""
+      notice(db, customer, "birthday", { regalo: gift }, now)
+    }
+    const missYouDays = program.missYouDays || DEFAULT_MISS_YOU_DAYS
+    const lastVisit = time(customer.lastActivityAt)
+    if (
+      idle >= missYouDays * DAY &&
+      (!customer.missYouAt || time(customer.missYouAt) < lastVisit) &&
+      greetingHour(now) &&
+      noticeEnabled(program, "missYou")
+    ) {
+      customer.missYouAt = iso(now)
+      notice(db, customer, "missYou", { dias: Math.floor(idle / DAY) }, now)
+    }
     if (program.birthdayBonus > 0 && customer.birthday && sameDay(customer.birthday, now)) {
-      const year = new Date(now).getFullYear()
       const already = db.transactions.some(
         (t) => t.customerId === customer.id && t.kind === "bonus" && t.reason === "Bono de cumpleaños" && new Date(t.createdAt).getFullYear() === year,
       )
@@ -532,7 +592,7 @@ export function runMaintenance(db: DB, businessId: string, now: number) {
           createdAt: iso(now),
         }
         customer.points += tx.points
-        if (tx.stamps) addStamp(db, customer, program, now)
+        if (tx.stamps) addStamp(db, customer, program, now, true)
         db.transactions.unshift(tx)
       }
     }
@@ -556,4 +616,34 @@ export function suspiciousCustomers(db: DB, businessId: string, now: number): { 
     .map((customer) => ({ customer, count: counts.get(customer.id) || 0, average }))
     .filter((row) => row.count >= 3 && row.count > average * program.suspiciousFactor)
     .sort((a, b) => b.count - a.count)
+}
+
+// ---------------------------------------------------------------- promotions
+
+/** Customers a promotion reaches: only those who accepted promotions. */
+export function audienceOf(db: DB, businessId: string, audience: Audience, now: number, includeOptedOut = false): Customer[] {
+  return db.customers.filter((c) => {
+    if (c.businessId !== businessId || (!c.promotionsOptIn && !includeOptedOut)) return false
+    const idle = now - time(c.lastActivityAt)
+    if (audience.kind === "tier") return c.tierId === audience.tierId
+    if (audience.kind === "inactive") return idle >= audience.days * DAY
+    if (audience.kind === "recent") return idle < audience.days * DAY
+    return true
+  })
+}
+
+/** Sends a promotion: one notice per customer, with their own name and balance. */
+export function sendCampaign(db: DB, campaign: Campaign, now: number): number {
+  const program = programOf(db, campaign.businessId)
+  const allowed = new Set<string>(PROMOTION_VARS)
+  const recipients = audienceOf(db, campaign.businessId, campaign.audience, now)
+  for (const customer of recipients) {
+    const vars = Object.fromEntries(Object.entries(baseVars(db, customer, program)).filter(([k]) => allowed.has(k)))
+    const message = renderNotice(campaign.message, vars)
+    if (message) pushNotice(db, customer, "promotion", message, now, campaign.id)
+  }
+  campaign.status = "sent"
+  campaign.sentAt = iso(now)
+  campaign.recipients = recipients.length
+  return recipients.length
 }

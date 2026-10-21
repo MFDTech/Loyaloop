@@ -1,3 +1,4 @@
+import { NOTICE_EVENTS } from "../../lib/notices"
 import { STAMP_ICON_OPTIONS } from "../../lib/stampIcons"
 import { useEffect, useState, type ChangeEvent } from "react"
 import type { PublicCard } from "../../lib/api"
@@ -148,10 +149,10 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
 
       <fieldset className="ll-fieldset">
         <legend>Avisos automáticos en la Wallet</legend>
-        <Check label={points ? "Puntos ganados" : "Sello ganado"} checked={value.notify.pointsEarned} onChange={(v) => set("notify", { ...value.notify, pointsEarned: v })} />
-        <Check label="Recompensa disponible" checked={value.notify.rewardAvailable} onChange={(v) => set("notify", { ...value.notify, rewardAvailable: v })} />
-        {value.type === "tiers" && <Check label="Cambio de nivel" checked={value.notify.tierChange} onChange={(v) => set("notify", { ...value.notify, tierChange: v })} />}
-        {points && <Check label="Puntos por vencer (30 días antes)" checked={value.notify.pointsExpiring} onChange={(v) => set("notify", { ...value.notify, pointsExpiring: v })} />}
+        {NOTICE_EVENTS.filter((e) => e.applies(value.type)).map((e) => (
+          <Check key={e.key} label={e.title} hint={e.when} checked={value.notify[e.key] ?? e.defaultOn} onChange={(v) => set("notify", { ...value.notify, [e.key]: v })} />
+        ))}
+        <p className="ll-field-hint">El dueño también los enciende y cambia sus textos en «Avisos» de su panel.</p>
       </fieldset>
     </div>
   )

@@ -6,6 +6,8 @@ import { loadConfig } from "./config"
 import { createPool, migrate } from "./db"
 import { createMessenger } from "./messenger"
 import { createPgStore } from "./pgStore"
+import { hashPassword, verifyPassword } from "./passwords"
+import { createService } from "../../src/lib/service"
 import { purgeExpiredSessions } from "./sessions"
 import { createWallets } from "./wallet"
 import { AppleWallet, apnsPusher, loadAppleCredentials } from "./wallet/apple"
@@ -51,7 +53,37 @@ if (apple && !config.publicUrl.startsWith("https://")) console.warn("[aviso] App
 const wallets = createWallets(pool, google, apple)
 const stopWallets = wallets.start()
 
-const app = createApp({ pool, store: createPgStore(pool), config, messenger, wallets })
+const store = createPgStore(pool)
+const app = createApp({ pool, store, config, messenger, wallets })
+
+// Server clock: daily rules (expirations, birthdays, «te extrañamos») and scheduled promotions.
+const system = createService(store, {
+  now: Date.now,
+  session: async () => null,
+  setSession: async () => undefined,
+  device: () => null,
+  setDevice: () => undefined,
+  hash: hashPassword,
+  verify: verifyPassword,
+  preview: config.preview,
+  simulator: config.simulator,
+  baseUrl: config.publicUrl,
+  messenger,
+  wallets,
+})
+let ticking = false
+const clock = setInterval(async () => {
+  if (ticking) return
+  ticking = true
+  try {
+    const { sent } = await system.tick()
+    if (sent) console.log(`[avisos] promoción enviada a ${sent} clientes`)
+  } catch (error) {
+    console.error("[tick]", (error as Error).message)
+  } finally {
+    ticking = false
+  }
+}, 60_000)
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => console.log(`[loyaloop] escuchando en el puerto ${info.port} · ${config.publicUrl}`))
 
 const timer = setInterval(() => purgeExpiredSessions(pool).catch((e) => console.error("[sessions]", e.message)), 60 * 60_000)
@@ -59,6 +91,7 @@ const timer = setInterval(() => purgeExpiredSessions(pool).catch((e) => console.
 async function shutdown(signal: string) {
   console.log(`[loyaloop] ${signal}: cerrando`)
   clearInterval(timer)
+  clearInterval(clock)
   stopWallets()
   server.close()
   await pool.end().catch(() => undefined)

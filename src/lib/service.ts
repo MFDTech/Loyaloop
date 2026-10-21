@@ -5,8 +5,10 @@
 // The pages never call this directly; they go through src/lib/api.ts.
 
 import * as engine from "./engine"
+import { DEFAULT_MISS_YOU_DAYS, MAX_NOTICE, MAX_PROMOTIONS_PER_DAY, NOTICE_EVENTS, PROMOTION_VARS, unknownVars, type Audience } from "./notices"
 import { defaultProgram } from "./seed"
 import type {
+  Campaign,
   AuditEntry,
   Branch,
   Business,
@@ -903,6 +905,130 @@ export function createService(store: Store, ctx: Context) {
     return list.map((n) => ({ ...n, customerName: db.customers.find((c) => c.id === n.customerId)?.name || "" }))
   }
 
+  // ---------------------------------------------------------------- notices and promotions
+
+  async function saveNotices(input: { notify: Program["notify"]; messages: Program["messages"]; missYouDays?: number }) {
+    const a = await inBusiness(["owner", "manager"])
+    const notify: Program["notify"] = {}
+    const messages: NonNullable<Program["messages"]> = {}
+    for (const e of NOTICE_EVENTS) {
+      const on = input.notify?.[e.key]
+      if (typeof on === "boolean") notify[e.key] = on
+      const raw = text(input.messages?.[e.key], 400)
+      if (!raw) continue
+      if (raw.length > MAX_NOTICE) throw new ApiError(`El aviso «${e.title}» es muy largo: máximo ${MAX_NOTICE} caracteres.`)
+      const unknown = unknownVars(raw, e.vars)
+      if (unknown.length) throw new ApiError(`El aviso «${e.title}» usa {${unknown[0]}}, que no está disponible en ese aviso.`)
+      if (raw !== e.defaultText({ type: "points", birthdayBonus: 0 }) && raw !== e.defaultText({ type: "points", birthdayBonus: 1 })) messages[e.key] = raw
+    }
+    const days = Number(input.missYouDays ?? DEFAULT_MISS_YOU_DAYS)
+    if (!Number.isInteger(days) || days < 7 || days > 365) throw new ApiError("«Te extrañamos» se puede enviar entre 7 y 365 días sin venir.")
+    await store.write(B(a.businessId), (db) => {
+      const program = engine.programOf(db, a.businessId)
+      program.notify = { ...program.notify, ...notify }
+      program.messages = messages
+      program.missYouDays = days
+      audit(db, a, a.businessId, "Actualizó los avisos", "", now())
+    })
+  }
+
+  function checkAudience(db: DB, businessId: string, input: Audience): Audience {
+    const kind = input?.kind
+    if (kind === "all") return { kind }
+    if (kind === "tier") {
+      const program = engine.programOf(db, businessId)
+      if (!program.tiers.some((t) => t.id === input.tierId)) throw new ApiError("Elige un nivel.")
+      return { kind, tierId: input.tierId }
+    }
+    if (kind === "inactive" || kind === "recent") {
+      const days = Number(input.days)
+      if (!Number.isInteger(days) || days < 1 || days > 365) throw new ApiError("Escribe de 1 a 365 días.")
+      return { kind, days }
+    }
+    throw new ApiError("Elige a quién se envía.")
+  }
+
+  async function campaigns(): Promise<Campaign[]> {
+    const a = await inBusiness(["owner", "manager"])
+    const db = await store.read(B(a.businessId))
+    return db.campaigns.filter((c) => c.businessId === a.businessId).sort((x, y) => (x.sendAt < y.sendAt ? 1 : -1)).slice(0, 50)
+  }
+
+  async function campaignAudience(audience: Audience): Promise<{ count: number; optedOut: number }> {
+    const a = await inBusiness(["owner", "manager"])
+    const db = await store.read(B(a.businessId))
+    const checked = checkAudience(db, a.businessId, audience)
+    const count = engine.audienceOf(db, a.businessId, checked, now()).length
+    const everyone = engine.audienceOf(db, a.businessId, checked, now(), true).length
+    return { count, optedOut: everyone - count }
+  }
+
+  async function createCampaign(input: { message: string; audience: Audience; sendAt?: string }): Promise<Campaign> {
+    const a = await inBusiness(["owner", "manager"])
+    const message = text(input.message, 400)
+    if (!message) throw new ApiError("Escribe el mensaje.")
+    if (message.length > MAX_NOTICE) throw new ApiError(`El mensaje es muy largo: máximo ${MAX_NOTICE} caracteres.`)
+    const unknown = unknownVars(message, PROMOTION_VARS)
+    if (unknown.length) throw new ApiError(`El mensaje usa {${unknown[0]}}, que no está disponible en promociones.`)
+    const at = input.sendAt ? new Date(input.sendAt).getTime() : now()
+    if (!Number.isFinite(at)) throw new ApiError("La fecha no es válida.")
+    if (input.sendAt && at < now() - MINUTE) throw new ApiError("Elige una fecha y hora que no haya pasado.")
+    if (at > now() + 90 * DAY) throw new ApiError("Puedes programar hasta 90 días adelante.")
+    const sendNow = !input.sendAt || at <= now() + MINUTE
+    return store.write(B(a.businessId), (db) => {
+      const audience = checkAudience(db, a.businessId, input.audience)
+      const day = engine.localTime(at).day
+      const sameDay = db.campaigns.filter((c) => c.businessId === a.businessId && c.status !== "canceled" && engine.localTime(new Date(c.sentAt || c.sendAt).getTime()).day === day)
+      if (sameDay.length >= MAX_PROMOTIONS_PER_DAY) throw new ApiError(`Puedes enviar hasta ${MAX_PROMOTIONS_PER_DAY} promociones por día. Elige otro día.`, "rate_limited")
+      const campaign: Campaign = {
+        id: uid("cp_"),
+        businessId: a.businessId,
+        message,
+        audience,
+        status: "scheduled",
+        sendAt: iso(sendNow ? now() : at),
+        createdBy: a.user.name,
+        createdAt: iso(),
+      }
+      db.campaigns.unshift(campaign)
+      if (sendNow) engine.sendCampaign(db, campaign, now())
+      audit(db, a, a.businessId, sendNow ? "Envió una promoción" : "Programó una promoción", message, now())
+      return campaign
+    })
+  }
+
+  async function cancelCampaign(id: string) {
+    const a = await inBusiness(["owner", "manager"])
+    await store.write(B(a.businessId), (db) => {
+      const campaign = db.campaigns.find((c) => c.id === id && c.businessId === a.businessId)
+      if (!campaign) throw new ApiError("No encontramos esa promoción.", "not_found")
+      if (campaign.status !== "scheduled") throw new ApiError("Esa promoción ya se envió.")
+      campaign.status = "canceled"
+      audit(db, a, a.businessId, "Canceló una promoción", campaign.message, now())
+    })
+  }
+
+  /**
+   * Server clock (every minute): daily rules for every business and scheduled
+   * promotions that are due. Not callable from the browser.
+   */
+  async function tick(): Promise<{ sent: number }> {
+    const global = await store.read("global")
+    let sent = 0
+    for (const business of global.businesses.filter((b) => b.status !== "paused")) {
+      await maintain(business.id)
+      const db = await store.read(B(business.id))
+      if (!db.campaigns.some((c) => c.businessId === business.id && c.status === "scheduled" && new Date(c.sendAt).getTime() <= now())) continue
+      sent += await store.write(B(business.id), (d) => {
+        let count = 0
+        for (const c of d.campaigns)
+          if (c.businessId === business.id && c.status === "scheduled" && new Date(c.sendAt).getTime() <= now()) count += engine.sendCampaign(d, c, now())
+        return count
+      })
+    }
+    return { sent }
+  }
+
   async function suspicious() {
     const a = await inBusiness(["owner", "manager"])
     const db = await store.read(B(a.businessId))
@@ -1051,7 +1177,9 @@ export function createService(store: Store, ctx: Context) {
       if (program.type === "stamps" && program.stampRewardId && !db.rewards.some((r) => r.id === program.stampRewardId && r.businessId === businessId))
         throw new ApiError("La recompensa de los sellos no pertenece a este negocio.")
       const index = db.programs.findIndex((p) => p.businessId === businessId)
-      const next = { ...program, businessId, tiers: [...program.tiers].sort((x, y) => x.threshold - y.threshold) }
+      const current = db.programs.find((p) => p.businessId === businessId)
+      // The owner's notice texts survive an admin edit of the rules.
+      const next = { messages: current?.messages, missYouDays: current?.missYouDays, ...program, businessId, tiers: [...program.tiers].sort((x, y) => x.threshold - y.threshold) }
       if (index === -1) db.programs.push(next)
       else db.programs[index] = next
       if (program.type !== "tiers") for (const c of db.customers) if (c.businessId === businessId) c.tierId = undefined
@@ -1510,6 +1638,12 @@ export function createService(store: Store, ctx: Context) {
     updateMember,
     updateBusinessContact,
     notices,
+    saveNotices,
+    campaigns,
+    campaignAudience,
+    createCampaign,
+    cancelCampaign,
+    tick,
     suspicious,
     metrics,
     // admin
@@ -1544,12 +1678,12 @@ export function createService(store: Store, ctx: Context) {
 
 export type Service = ReturnType<typeof createService>
 
-/** Methods the browser may call over HTTP. recordPayment is only for webhooks. */
+/** Methods the browser may call over HTTP. recordPayment (webhooks) and tick (server clock) are not here. */
 export const PUBLIC_METHODS = [
   "me", "login", "logout", "requestPasswordReset", "resetPassword", "invitation", "acceptInvitation", "changePassword", "impersonate", "stopImpersonating",
   "bundle", "customers", "customer", "adjustBalance", "exportCustomersCsv", "activity", "refundPurchase", "reviewQueue", "resolveReview",
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
-  "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "suspicious", "metrics",
+  "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
   "registration", "sendCode", "completeRegistration", "recoverCard", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
@@ -1559,6 +1693,6 @@ export type PublicMethod = (typeof PUBLIC_METHODS)[number]
 
 /** Calls that only read: the browser does not need to refresh other views after them. */
 export const READ_METHODS = new Set<string>([
-  "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "suspicious", "metrics",
+  "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "campaigns", "campaignAudience", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "kiosk", "kioskScanStatus",
 ])
