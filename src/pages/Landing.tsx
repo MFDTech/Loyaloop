@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
 import { absoluteLink, href } from "../lib/router"
-import { DEMO_CODE } from "../lib/seed"
 import Qr from "../components/Qr"
 import RoiCalculator from "../components/RoiCalculator"
 import { Button, Icon, Logo, asset, type IconName } from "../components/ui"
@@ -282,14 +281,14 @@ export default function Landing() {
         <section id="demo" className="container ll-demo-section">
           <div className="ll-demo-copy">
             <span className="eyebrow">PRUÉBALA EN 20 SEGUNDOS</span>
-            <h2>Guarda una tarjeta de prueba en tu celular.</h2>
-            <p>Créala como lo haría tu cliente, agrégala a tu Wallet y simula una visita: verás el sello sumarse y el aviso llegar a tu pantalla.</p>
-            <a className="button ll-demo-mobile" href={href(`/r/${DEMO_CODE}`)}>
-              Crear mi tarjeta de prueba <Icon name="arrow" size={16} />
+            <h2>Llévate una tarjeta LoyaLoop en tu celular.</h2>
+            <p>Un toque y queda en tu Wallet, igual que la de tus clientes. Luego simula una visita: verás el sello sumarse y el aviso llegar a tu pantalla.</p>
+            <a className="button ll-demo-mobile" href={href("/demo")}>
+              Agregar a mi Wallet <Icon name="arrow" size={16} />
             </a>
           </div>
           <div className="ll-demo-qr">
-            <Qr value={absoluteLink(`/r/${DEMO_CODE}`)} size={168} label="Código para crear una tarjeta de prueba en tu celular" />
+            <Qr value={absoluteLink("/demo")} size={168} label="Código para guardar una tarjeta LoyaLoop en tu celular" />
             <span>Escanéalo con la cámara de tu celular</span>
           </div>
         </section>

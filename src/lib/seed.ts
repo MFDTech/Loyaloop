@@ -53,15 +53,15 @@ export function demoBusiness(createdAt: string): Pick<DB, "businesses" | "branch
     businesses: [
       {
         id,
-        name: "Café de muestra",
-        sector: "Cafetería",
+        name: "LoyaLoop",
+        sector: "Demostración",
         contactName: "LoyaLoop",
         email: "privacidad@loyaloop.com.mx",
         phone: "",
         status: "active",
-        brand: { color: "#6B3E26", stampIcon: "coffee" },
+        brand: { color: "#8A2E12", stampIcon: "star" },
         discreet: false,
-        neutralName: "Café de muestra",
+        neutralName: "LoyaLoop",
         locationAlerts: false,
         askPhone: false,
         demo: true,
@@ -75,13 +75,13 @@ export function demoBusiness(createdAt: string): Pick<DB, "businesses" | "branch
       {
         ...defaultProgram(id),
         type: "stamps",
-        stampGoal: 6,
+        stampGoal: 5,
         stampRewardId: "rw_demo_cafe",
         expirationMonths: 0,
         notify: { stampEarned: true, almostThere: true, rewardAvailable: true },
       },
     ],
-    rewards: [{ id: "rw_demo_cafe", businessId: id, name: "Café de la casa", description: "Recompensa de demostración: no se canjea en ningún negocio.", cost: 0, active: true, createdAt }],
+    rewards: [{ id: "rw_demo_cafe", businessId: id, name: "Premio de demostración", description: "Así le llega su premio a tu cliente. No se canjea en ningún negocio.", cost: 0, active: true, createdAt }],
     integrations: [],
   }
 }

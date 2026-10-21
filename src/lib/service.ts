@@ -1353,12 +1353,43 @@ export function createService(store: Store, ctx: Context) {
 
   /** The public demo card's business, created the first time anyone needs it. */
   async function ensureDemo() {
-    if (await store.business(DEMO_BUSINESS_ID)) return
     const parts = demoBusiness(iso())
+    const current = await store.business(DEMO_BUSINESS_ID)
+    if (current && current.name === parts.businesses[0].name) return
     await store.write(B(DEMO_BUSINESS_ID), (db) => {
-      if (db.businesses.some((b) => b.id === DEMO_BUSINESS_ID)) return
-      for (const key of Object.keys(parts) as (keyof typeof parts)[]) (db[key] as unknown[]).push(...parts[key])
+      const existing = db.businesses.find((b) => b.id === DEMO_BUSINESS_ID)
+      if (!existing) {
+        for (const key of Object.keys(parts) as (keyof typeof parts)[]) (db[key] as unknown[]).push(...parts[key])
+        return
+      }
+      // An earlier version of the demo: bring its look and rules up to date.
+      const { createdAt: _c, ...business } = parts.businesses[0]
+      Object.assign(existing, business)
+      const program = db.programs.find((p) => p.businessId === DEMO_BUSINESS_ID)
+      if (program) Object.assign(program, parts.programs[0])
+      const reward = db.rewards.find((r) => r.id === parts.rewards[0].id)
+      if (reward) Object.assign(reward, { name: parts.rewards[0].name, description: parts.rewards[0].description })
     })
+  }
+
+  /** One tap from the landing page: an anonymous LoyaLoop card, or the one this browser already has. */
+  async function demoCard(token = ""): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {
+    await ensureDemo()
+    const clean = normalizeToken(String(token || ""))
+    const result = await store.write(B(DEMO_BUSINESS_ID), (db) => {
+      let customer = clean ? db.customers.find((c) => c.businessId === DEMO_BUSINESS_ID && c.token === clean) : undefined
+      const created = !customer
+      if (!customer) {
+        const at = iso()
+        let fresh = customerToken()
+        while (db.customers.some((c) => c.token === fresh)) fresh = customerToken()
+        customer = { id: uid("c_"), businessId: DEMO_BUSINESS_ID, name: "Invitado", phone: "", email: "", birthday: "", token: fresh, points: 0, stamps: 0, earnedRewards: [], branchId: "br_demo", promotionsOptIn: false, privacyAcceptedAt: at, createdAt: at, lastActivityAt: at }
+        db.customers.push(customer)
+      }
+      return { card: publicCard(db, DEMO_BUSINESS_ID), holder: holder(db, customer), created, customerId: customer.id }
+    })
+    const { customerId, ...rest } = result
+    return cardWithLinks(DEMO_BUSINESS_ID, customerId, rest)
   }
 
   async function branchByCode(code: string) {
@@ -1830,6 +1861,7 @@ export function createService(store: Store, ctx: Context) {
     completeRegistration,
     recoverCard,
     privacyNotice,
+    demoCard,
     demoVisit,
     createCard,
     sendCardLink,
@@ -1856,7 +1888,7 @@ export const PUBLIC_METHODS = [
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
-  "registration", "privacyNotice", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
+  "registration", "privacyNotice", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 

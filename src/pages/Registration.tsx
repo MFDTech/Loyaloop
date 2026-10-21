@@ -374,7 +374,7 @@ function DemoVisit({ code, holder, onChange }: { code: string; holder: api.CardH
   )
 }
 
-function Done({ card, holder: initial, links, code }: { card: api.PublicCard; holder: api.CardHolder; links: api.WalletLinks; code: string }) {
+export function Done({ card, holder: initial, links, code }: { card: api.PublicCard; holder: api.CardHolder; links: api.WalletLinks; code: string }) {
   const [holder, setHolder] = useState(initial)
   const [device] = useState(platform)
   const [clicked, setClicked] = useState<"" | "apple" | "google">("")
@@ -397,7 +397,9 @@ function Done({ card, holder: initial, links, code }: { card: api.PublicCard; ho
   return (
     <div className="ll-stack" style={{ gap: 18 }}>
       <p className="ll-reg-lead">
-        Hola, {holder.name.split(" ")[0]}. Guárdala en tu Wallet y muéstrala en la caja cada vez que pagues.
+        {card.demo
+          ? "Así de fácil la guardan tus clientes: un toque y queda en su Wallet, sin apps ni formularios largos."
+          : `Hola, ${holder.name.split(" ")[0]}. Guárdala en tu Wallet y muéstrala en la caja cada vez que pagues.`}
       </p>
       <div className="ll-stack" style={{ gap: 10 }}>
         {showApple && button("apple")}
@@ -414,8 +416,12 @@ function Done({ card, holder: initial, links, code }: { card: api.PublicCard; ho
       <div className="ll-reg-pass">{device === "google" ? <GooglePass card={card} holder={holder} /> : <ApplePass card={card} holder={holder} />}</div>
       {device === "desktop" && (
         <div className="ll-reg-desktop">
-          <Qr value={absoluteLink(`/r/${code}`)} size={120} label="Código para abrir este registro en tu celular" />
-          <p className="ll-hint">¿Estás en una computadora? Escanea este código con tu celular, toca «Recupérala» {card.askPhone ? "y guárdala en tu Wallet." : "y pide el enlace a tu correo."}</p>
+          <Qr value={absoluteLink(card.demo ? "/demo" : `/r/${code}`)} size={120} label="Código para abrir esta página en tu celular" />
+          <p className="ll-hint">
+            {card.demo
+              ? "¿Estás en una computadora? Escanea este código con tu celular para guardar la tarjeta en tu Wallet."
+              : `¿Estás en una computadora? Escanea este código con tu celular, toca «Recupérala» ${card.askPhone ? "y guárdala en tu Wallet." : "y pide el enlace a tu correo."}`}
+          </p>
         </div>
       )}
     </div>

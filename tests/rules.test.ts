@@ -241,6 +241,16 @@ for (const [label, make] of backends) {
     })
 
     describe("demo card", () => {
+      it("gives a LoyaLoop card in one tap and keeps the same one for this browser", async () => {
+        const first = await api.demoCard("")
+        expect(first.card).toMatchObject({ businessName: "LoyaLoop", demo: true })
+        expect(first.holder.name).toBe("Invitado")
+        const again = await api.demoCard(first.holder.token)
+        expect(again.holder.token).toBe(first.holder.token)
+        expect(again.created).toBe(false)
+        expect((await api.demoVisit("DEMO", first.holder.token)).holder.stamps).toBe(1)
+      })
+
       it("creates the demo business on first use and lets the visitor add stamps", async () => {
         const reg = await api.registration("DEMO")
         expect(reg.card).toMatchObject({ demo: true, type: "stamps", askPhone: false })

@@ -6,6 +6,7 @@ import { AcceptInvite, Login, RecoverPassword, ResetPassword } from "./pages/Aut
 import BusinessApp from "./pages/BusinessApp"
 import AdminApp from "./pages/AdminApp"
 import Registration from "./pages/Registration"
+import DemoCard from "./pages/DemoCard"
 import Kiosk from "./pages/Kiosk"
 import Legal from "./pages/Legal"
 import NotFound from "./pages/NotFound"
@@ -39,6 +40,8 @@ function Router() {
       return <ResetPassword token={second || ""} />
     case "invitacion":
       return <AcceptInvite token={second || ""} />
+    case "demo":
+      return <DemoCard />
     case "r":
       return <Registration code={second || ""} cardToken={route.parts[2] === "tarjeta" ? route.parts[3] || "" : ""} />
     case "caja":
