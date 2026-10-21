@@ -107,7 +107,7 @@ export default function RoiCalculator({ onCall, onStart }: { onCall: () => void;
         </div>
         {planFor(kind, ticket) === "starter" ? (
           <Button onClick={onStart}>
-            Empieza gratis 14 días <Icon name="arrow" size={16} />
+            Crea tu cuenta <Icon name="arrow" size={16} />
           </Button>
         ) : (
           <Button onClick={onCall}>

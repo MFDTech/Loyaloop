@@ -6,8 +6,8 @@ import type { BusinessStatus } from "../../lib/types"
 import { cardTypeLabel, inkFor, int, plural } from "../../lib/util"
 import { Badge, Button, Card, Empty, ErrorState, Icon, Loading, Notice, PageHeader, SelectField, Stat } from "../../components/ui"
 
-export const statusLabel: Record<BusinessStatus, string> = { active: "Activo", trial: "En prueba", paused: "Pausado" }
-export const statusTone = { active: "success", trial: "info", paused: "warning" } as const
+export const statusLabel: Record<BusinessStatus, string> = { pending: "Por activar", active: "Activo", trial: "En prueba", paused: "Pausado" }
+export const statusTone = { pending: "warning", active: "success", trial: "info", paused: "warning" } as const
 
 export function BusinessesTable({ rows }: { rows: api.BusinessRow[] }) {
   if (!rows.length) return <Empty icon="store" title="No hay negocios con estos filtros" />
@@ -128,6 +128,7 @@ export default function Businesses() {
           <SelectField label="Estado" value={status} onChange={(e) => setStatus(e.target.value as "" | BusinessStatus)}>
             <option value="">Todos</option>
             <option value="active">Activos</option>
+            <option value="pending">Por activar</option>
             <option value="trial">En prueba</option>
             <option value="paused">Pausados</option>
           </SelectField>

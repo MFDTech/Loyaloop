@@ -104,7 +104,7 @@ export default function BusinessApp({ route }: { route: Route }) {
       current={route.path}
       workspace={{
         name: me.business?.name || "Negocio",
-        detail: me.business?.status === "trial" ? "Periodo de prueba" : me.business?.status === "paused" ? "Cuenta pausada" : "Panel del negocio",
+        detail: me.business?.status === "pending" ? "Por activar" : me.business?.status === "trial" ? "Periodo de prueba" : me.business?.status === "paused" ? "Cuenta pausada" : "Panel del negocio",
         icon: "store",
       }}
     >
@@ -114,16 +114,24 @@ export default function BusinessApp({ route }: { route: Route }) {
   )
 }
 
-/** Self-serve trial: days left, and how to keep the card once it ends. */
+/** Accounts waiting for activation, or on a trial with an end date. */
 function TrialBanner({ business }: { business?: api.Me["business"] }) {
-  if (!business?.selfServe || business.status !== "trial" || !business.trialEndsAt) return null
+  if (business?.status === "pending")
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <Notice tone="info" title="Tu tarjeta está lista para activarse">
+          Mientras, diseña tu tarjeta e imprime tu letrero. Para activarla escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago del plan Starter ($390 al mes). En cuanto se active, tus clientes pueden registrarse.
+        </Notice>
+      </div>
+    )
+  if (business?.status !== "trial" || !business.trialEndsAt) return null
   const left = Math.ceil((new Date(business.trialEndsAt).getTime() - Date.now()) / DAY)
   return (
     <div style={{ marginBottom: 20 }}>
-      <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Prueba gratis: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu prueba gratis terminó"}>
+      <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Prueba: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu prueba terminó"}>
         {left > 0
-          ? "Para seguir con el plan Starter ($390 al mes) escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago."
-          : "Tu tarjeta deja de aceptar clientes nuevos 3 días después de que termina la prueba. Escríbenos a hola@loyaloop.com.mx para activarla ($390 al mes)."}
+          ? "Para seguir cuando termine, escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago."
+          : "Tu tarjeta dejó de aceptar clientes nuevos. Escríbenos a hola@loyaloop.com.mx para activarla."}
       </Notice>
     </div>
   )

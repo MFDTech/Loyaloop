@@ -383,8 +383,6 @@ export function validateProgram(p: Omit<Program, "businessId">) {
 }
 
 /** Free days for businesses that sign up alone, and days the card keeps working after that. */
-export const TRIAL_DAYS = 14
-export const TRIAL_GRACE_DAYS = 3
 
 const text = (value: unknown, max = 500) => (typeof value === "string" ? value.trim().slice(0, max) : "")
 
@@ -1215,7 +1213,7 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail" | "plan">>) {
+  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail" | "plan">> & { trialDays?: number }) {
     const a = await asAdmin()
     const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone", "legalName", "legalAddress", "privacyEmail", "plan"] as const
     const patch: Record<string, unknown> = {}
@@ -1231,12 +1229,19 @@ export function createService(store: Store, ctx: Context) {
     if (patch.email !== undefined && !isEmail(String(patch.email))) throw new ApiError("El correo de contacto no es válido.")
     if (patch.name !== undefined && !text(patch.name)) throw new ApiError("El nombre no puede quedar vacío.")
     if (patch.status !== undefined && !["active", "trial", "paused"].includes(String(patch.status))) throw new ApiError("Estado no válido.")
+    const trialDays = input.trialDays === undefined ? undefined : Math.floor(Number(input.trialDays))
+    if (trialDays !== undefined && !(trialDays >= 1 && trialDays <= 90)) throw new ApiError("La prueba debe durar entre 1 y 90 días.")
+    if (trialDays !== undefined) {
+      patch.status = "trial"
+      patch.trialEndsAt = iso(now() + trialDays * DAY)
+    } else if (patch.status !== undefined) patch.trialEndsAt = undefined
     await store.write(B(businessId), (db) => {
       const business = db.businesses.find((b) => b.id === businessId)
       if (!business) throw new ApiError("El negocio no existe.")
       Object.assign(business, patch)
+      if (business.trialEndsAt === undefined) delete business.trialEndsAt
       if (business.discreet) business.locationAlerts = false
-      audit(db, a, businessId, input.status ? `Cambió el estado a ${input.status}` : "Editó los datos del negocio", "", now())
+      audit(db, a, businessId, trialDays ? `Le dio una prueba de ${trialDays} días` : input.status ? `Cambió el estado a ${input.status}` : "Editó los datos del negocio", "", now())
     })
   }
 
@@ -1358,12 +1363,17 @@ export function createService(store: Store, ctx: Context) {
     }
   }
 
-  /** A self-serve trial that ended more than TRIAL_GRACE_DAYS ago without being activated. */
+  /** A trial LoyaLoop gave with an end date, already over and not activated. */
   function trialOver(business: Business) {
-    return !!business.selfServe && business.status === "trial" && !!business.trialEndsAt && new Date(business.trialEndsAt).getTime() + TRIAL_GRACE_DAYS * DAY < now()
+    return business.status === "trial" && !!business.trialEndsAt && new Date(business.trialEndsAt).getTime() < now()
   }
 
-  /** Website sign-up for the Starter plan: the owner gets a working card and a 14-day trial. */
+  /** The card does not take customers or scans: paused, waiting for activation, or a trial that ended. */
+  function closed(business: Business) {
+    return business.status === "paused" || business.status === "pending" || trialOver(business)
+  }
+
+  /** Website sign-up for the Starter plan: the owner designs the card; LoyaLoop activates it once paid (or gives a trial). */
   async function signupBusiness(input: { ownerName: string; businessName: string; sector: string; email: string; password: string; phone?: string; branchAddress?: string; terms: boolean }): Promise<Me> {
     const ownerName = text(input?.ownerName, 80)
     const name = text(input?.businessName, 60)
@@ -1379,9 +1389,8 @@ export function createService(store: Store, ctx: Context) {
     const userId = uid("u_")
     const hashed = await ctx.hash(password)
     const created = iso()
-    const trialEndsAt = iso(now() + TRIAL_DAYS * DAY)
     await store.write(B(id), (db) => {
-      db.businesses.push({ id, name, sector: text(input.sector, 60) || "Otro", contactName: ownerName, email, phone: normalizePhone(input.phone || ""), status: "trial", plan: "starter", selfServe: true, trialEndsAt, brand: { color: "#8A2E12", stampIcon: "check" }, discreet: false, neutralName: "Mi tarjeta de beneficios", locationAlerts: false, askPhone: false, createdAt: created })
+      db.businesses.push({ id, name, sector: text(input.sector, 60) || "Otro", contactName: ownerName, email, phone: normalizePhone(input.phone || ""), status: "pending", plan: "starter", selfServe: true, brand: { color: "#8A2E12", stampIcon: "check" }, discreet: false, neutralName: "Mi tarjeta de beneficios", locationAlerts: false, askPhone: false, createdAt: created })
       const branchId = uid("br_")
       db.branches.push({ id: branchId, businessId: id, name: "Sucursal principal", address: text(input.branchAddress, 200), code: readableCode(6), createdAt: created })
       db.registers.push({ id: uid("rg_"), businessId: id, branchId, name: "Caja 1" })
@@ -1390,7 +1399,7 @@ export function createService(store: Store, ctx: Context) {
       db.programs.push({ ...defaultProgram(id), type: "stamps", stampGoal: 8, stampRewardId: rewardId, expirationMonths: 0, dailyLimit: 1, notify: { stampEarned: true, almostThere: true, rewardAvailable: true } })
       for (const provider of ["mercadopago", "clip"] as Provider[]) db.integrations.push({ businessId: id, provider, status: "not_connected" })
       db.users.push({ id: userId, name: ownerName, email, password: hashed, role: "owner", businessId: id, excludedFromEarning: false, active: true, createdAt: created })
-      audit(db, { user: db.users.find((u) => u.id === userId)!, businessId: id, role: "owner", impersonated: false }, id, "Creó su cuenta desde la página", `Plan Starter, prueba de ${TRIAL_DAYS} días`, now())
+      audit(db, { user: db.users.find((u) => u.id === userId)!, businessId: id, role: "owner", impersonated: false }, id, "Creó su cuenta desde la página", "Plan Starter, por activar", now())
     })
     await ctx.setSession({ userId, createdAt: iso() })
     await sendEmail({
@@ -1398,14 +1407,14 @@ export function createService(store: Store, ctx: Context) {
       subject: "Tu tarjeta de lealtad ya está lista",
       heading: `Bienvenido a LoyaLoop, ${ownerName.split(" ")[0]}`,
       paragraphs: [
-        `Creamos la tarjeta de sellos de ${name}. Tienes ${TRIAL_DAYS} días gratis para probarla con tus clientes.`,
-        "En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.",
+        `Creamos la tarjeta de sellos de ${name}. En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.`,
+        "Para activarla, responde a este correo o escríbenos a hola@loyaloop.com.mx y te mandamos los datos de pago del plan Starter ($390 al mes). En cuanto se active, tus clientes pueden registrarse.",
       ],
       action: { label: "Entrar a mi panel", url: link("#/panel") },
     })
     const admins = (await store.read("global")).users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
     for (const to of admins)
-      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, `Prueba hasta: ${trialEndsAt.slice(0, 10)}`], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
+      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, "Está por activar: actívalo o dale una prueba desde su ficha."], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
     return (await me())!
   }
 
@@ -1481,7 +1490,7 @@ export function createService(store: Store, ctx: Context) {
     const branch = typeof code === "string" && /^[A-Z0-9]{4,12}$/i.test(code) ? await store.branchByCode(code) : undefined
     if (!branch) throw new ApiError("Este enlace no corresponde a ninguna sucursal.", "not_found")
     const business = await store.business(branch.businessId)
-    if (!business || business.status === "paused" || trialOver(business)) throw new ApiError("Este programa no está disponible por ahora.", "paused")
+    if (!business || closed(business)) throw new ApiError("Este programa no está disponible por ahora.", "paused")
     return { branch, business }
   }
 
@@ -1792,7 +1801,8 @@ export function createService(store: Store, ctx: Context) {
     if (!device) throw new ApiError("Este escáner ya no está vinculado.", "unpaired")
     const business = await store.business(device.businessId)
     if (!business || business.status === "paused") throw new ApiError("La cuenta del negocio está pausada.", "paused")
-    if (trialOver(business)) throw new ApiError("Terminó la prueba gratis. Activa tu plan para seguir sumando visitas.", "paused")
+    if (business.status === "pending") throw new ApiError("Tu tarjeta aún no está activa. Escríbenos a hola@loyaloop.com.mx para activarla.", "paused")
+    if (trialOver(business)) throw new ApiError("Terminó la prueba. Activa tu plan para seguir sumando visitas.", "paused")
     return device
   }
 

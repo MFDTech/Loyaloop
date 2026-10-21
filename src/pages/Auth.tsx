@@ -16,7 +16,7 @@ const LOGIN_STORY = {
 const SIGNUP_STORY = {
   title: "Que tus clientes vuelvan, desde hoy.",
   text: "Una tarjeta de sellos con tu marca en el celular de tus clientes. Sin apps y sin tarjetas de cartón que se pierden.",
-  points: ["Lista en 5 minutos, la configuras tú", "Apple Wallet y Google Wallet", "Imprime tu QR y ponlo en el mostrador", "14 días gratis, después $390 al mes"],
+  points: ["Lista en 5 minutos, la configuras tú", "Apple Wallet y Google Wallet", "Imprime tu QR y ponlo en el mostrador", "$390 al mes, sin plazo forzoso"],
 }
 
 function AuthLayout({ children, story = LOGIN_STORY }: { children: ReactNode; story?: typeof LOGIN_STORY }) {
@@ -89,7 +89,7 @@ export function Login({ next }: { next: string }) {
         <p className="ll-hint" style={{ textAlign: "center" }}>
           ¿Aún no tienes cuenta?{" "}
           <a className="ll-link" href={href("/empezar")}>
-            Empieza gratis
+            Crea tu cuenta
           </a>
         </p>
         {PREVIEW && (
@@ -119,7 +119,7 @@ export function Login({ next }: { next: string }) {
 
 const SIGNUP_SECTORS = ["Cafetería", "Restaurante", "Bar", "Panadería", "Salón o estética", "Barbería", "Gimnasio o estudio", "Tienda", "Hotel o motel", "Otro"]
 
-/** #/empezar: Starter plan, set up by the owner, 14 days free. */
+/** #/empezar: Starter plan, set up by the owner; LoyaLoop activates it once paid. */
 export function Signup() {
   const [form, setForm] = useState({ ownerName: "", businessName: "", sector: "", email: "", password: "", phone: "", terms: false })
   const [localError, setLocalError] = useState("")
@@ -138,7 +138,7 @@ export function Signup() {
       <form className="ll-auth-form" onSubmit={submit} noValidate>
         <div>
           <h2>Crea tu tarjeta de lealtad</h2>
-          <p>Plan Starter: 14 días gratis, sin tarjeta de crédito. Tu tarjeta de sellos queda lista en 5 minutos.</p>
+          <p>Plan Starter, $390 al mes. Crea tu cuenta y diseña tu tarjeta de sellos; la activamos en cuanto confirmes tu pago.</p>
         </div>
         <Field label="Tu nombre" autoComplete="name" value={form.ownerName} onChange={(e) => set("ownerName", e.target.value)} required />
         <Field label="Nombre de tu negocio" autoComplete="organization" value={form.businessName} onChange={(e) => set("businessName", e.target.value)} hint="Así aparece en la tarjeta de tus clientes." required />

@@ -137,7 +137,7 @@ const FAQ: [string, string][] = [
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
   ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
-  ["¿Qué pasa al terminar los 14 días gratis?", "En tu panel ves cuántos días te quedan. Si quieres seguir, pagas $390 al mes y todo sigue igual. Si no, tu tarjeta deja de aceptar clientes nuevos hasta que actives el plan."],
+  ["¿Cómo empiezo con Starter?", "Creas tu cuenta en la página, pones tu logo, colores y recompensa, e imprimes el QR para tu mostrador. Nos escribes, te mandamos los datos de pago y activamos tu tarjeta el mismo día."],
   ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita. En Pro conectamos tu terminal de cobro y los puntos se suman solos según lo que pagan, sin que el cajero haga nada."],
 ]
 
@@ -580,9 +580,9 @@ export default function Landing() {
                 ))}
               </ul>
               <Button onClick={() => navigate("/empezar")}>
-                Empieza gratis 14 días <Icon name="arrow" size={16} />
+                Crea tu cuenta <Icon name="arrow" size={16} />
               </Button>
-              <small>Sin tarjeta de crédito.</small>
+              <small>Diseñas tu tarjeta hoy y la activamos al confirmar tu pago.</small>
             </article>
             <article className="ll-plan is-featured">
               <span className="ll-plan-tag">PUNTOS AUTOMÁTICOS</span>

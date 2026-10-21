@@ -148,7 +148,7 @@ function DataTab({ data }: { data: AdminBundle }) {
           <div className="ll-stack">
             <p className="ll-hint">
               {business.plan === "starter"
-                ? `Starter ($390 al mes): una sucursal, tarjeta de sellos que el dueño edita solo.${business.trialEndsAt && business.status === "trial" ? ` La prueba termina el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}.` : ""}`
+                ? "Starter ($390 al mes): una sucursal, tarjeta de sellos que el dueño edita solo."
                 : "Pro ($990 al mes): terminal conectada, todos los tipos de tarjeta y sucursales adicionales."}
             </p>
             <div className="ll-row">
@@ -171,12 +171,32 @@ function DataTab({ data }: { data: AdminBundle }) {
             <p className="ll-hint">
               {business.status === "paused"
                 ? "La cuenta está pausada: el equipo no puede entrar, el registro está cerrado y los escáneres no suman."
-                : business.status === "trial"
-                  ? "En prueba: todo funciona y aún no se cobra."
-                  : "Activa: se cobra por sucursal cada mes."}
+                : business.status === "pending"
+                  ? "Se dio de alta desde la página y espera activación: el dueño ya diseña su tarjeta, pero el registro y la caja están cerrados. Actívala cuando pague o dale una prueba."
+                  : business.status === "trial"
+                    ? business.trialEndsAt
+                      ? `En prueba hasta el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}. Después se cierra el registro hasta que la actives.`
+                      : "En prueba: todo funciona y aún no se cobra."
+                    : "Activa: se cobra cada mes."}
             </p>
             <div className="ll-row">
-              {(["active", "trial", "paused"] as BusinessStatus[])
+              {[14, 30].map((days) => (
+                <Button
+                  key={days}
+                  variant="secondary"
+                  size="sm"
+                  disabled={save.pending}
+                  onClick={async () => {
+                    const r = await save.run(business.id, { trialDays: days })
+                    if (r.ok) toast(`Prueba de ${days} días activada.`)
+                  }}
+                >
+                  Dar prueba de {days} días
+                </Button>
+              ))}
+            </div>
+            <div className="ll-row">
+              {(["active", "paused"] as BusinessStatus[])
                 .filter((s) => s !== business.status)
                 .map((s) => (
                   <Button key={s} variant={s === "paused" ? "danger" : "secondary"} size="sm" onClick={() => setStatus(s)}>

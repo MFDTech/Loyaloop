@@ -4,13 +4,28 @@ import { absoluteLink } from "../lib/router"
 import { inkFor } from "../lib/util"
 import Qr from "../components/Qr"
 import { Button, ErrorState, Loading } from "../components/ui"
+import { draftCard } from "./admin/ProgramEditor"
+import type { PublicCard } from "../lib/api"
+
+/** The public card, or, for its own owner while the account is not active yet, the card as designed. */
+async function posterCard(code: string): Promise<PublicCard> {
+  try {
+    return (await api.registration(code)).card
+  } catch (error) {
+    const bundle = await api.bundle().catch(() => undefined)
+    if (!bundle?.branches.some((b) => b.code.toUpperCase() === code.toUpperCase())) throw error
+    const { businessId: _b, ...program } = bundle.program
+    const { business } = bundle
+    return draftCard(business.name, program, { brand: business.brand, discreet: business.discreet, neutralName: business.neutralName, locationAlerts: false, askPhone: false }, bundle.rewards.filter((r) => r.active))
+  }
+}
 
 /** #/letrero/<código>: printable counter sign with the branch's registration QR. */
 export default function Poster({ code }: { code: string }) {
-  const info = useAsync(() => api.registration(code), [code])
+  const info = useAsync(() => posterCard(code), [code])
   if (info.error) return <ErrorState message={info.error} />
   if (!info.data) return <Loading rows={4} />
-  const card = info.data.card
+  const card = info.data
   const { ink } = inkFor(card.brand.color)
   const reward = card.type === "stamps" ? card.rewards[0]?.name : undefined
   return (

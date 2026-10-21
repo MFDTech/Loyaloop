@@ -3,7 +3,8 @@
 
 export type Role = "admin" | "owner" | "manager" | "cashier"
 export type CardType = "points" | "stamps" | "rewards" | "tiers"
-export type BusinessStatus = "active" | "trial" | "paused"
+/** pending: signed up on the website, waiting for LoyaLoop to activate it (payment or a trial). */
+export type BusinessStatus = "pending" | "active" | "trial" | "paused"
 export type Provider = "mercadopago" | "clip"
 
 export interface User {

@@ -272,15 +272,17 @@ for (const [label, make] of backends) {
     describe("Starter sign-up", () => {
       const signup = { ownerName: "Ana López", businessName: "Panadería Sol", sector: "Café o restaurante", email: "ana@sol.test", password: "segura123", terms: true }
 
-      it("creates a stamps card on a 14-day trial that takes customers right away", async () => {
+      it("creates a stamps card that waits for LoyaLoop to activate it", async () => {
         await api.logout()
         const me = await api.signupBusiness(signup)
         expect(me.role).toBe("owner")
-        expect(me.business).toMatchObject({ plan: "starter", status: "trial", selfServe: true })
+        expect(me.business).toMatchObject({ plan: "starter", status: "pending", selfServe: true })
         const bundle = await api.bundle()
         expect(bundle.program).toMatchObject({ type: "stamps", stampGoal: 8 })
-        const reg = await api.registration(bundle.branches[0].code)
-        expect(reg.card.businessName).toBe("Panadería Sol")
+        await expect(api.registration(bundle.branches[0].code)).rejects.toThrow(/no está disponible/)
+        await admin()
+        await api.adminUpdateBusiness(me.business!.id, { status: "active" })
+        expect((await api.registration(bundle.branches[0].code)).card.businessName).toBe("Panadería Sol")
         await api.logout()
         await expect(api.signupBusiness(signup)).rejects.toThrow(/Ya existe/)
         await expect(api.signupBusiness({ ...signup, email: "otra@sol.test", terms: false })).rejects.toThrow(/términos/)
@@ -301,15 +303,16 @@ for (const [label, make] of backends) {
         await expect(api.saveCard({ program: affair.program, brand: { brand: affair.business.brand, discreet: false, neutralName: "" } })).rejects.toThrow(/LoyaLoop/)
       })
 
-      it("closes registration a few days after the trial ends, until LoyaLoop activates it", async () => {
+      it("closes registration when a trial LoyaLoop gave ends, until it is activated", async () => {
         await api.logout()
         const me = await api.signupBusiness(signup)
         const code = (await api.bundle()).branches[0].code
-        advance(60 * 24 * 16)
+        await admin()
+        await api.adminUpdateBusiness(me.business!.id, { trialDays: 14 })
+        advance(60 * 24 * 13)
         expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
         advance(60 * 24 * 2)
         await expect(api.registration(code)).rejects.toThrow(/no está disponible/)
-        await admin()
         await api.adminUpdateBusiness(me.business!.id, { status: "active" })
         expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
       })
