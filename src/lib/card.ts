@@ -6,6 +6,7 @@ export function cardFrom(business: Business, program: Program, rewards: Reward[]
   return {
     businessName: business.discreet ? business.neutralName : business.name,
     discreet: business.discreet,
+    demo: !!business.demo,
     brand: business.brand,
     type: program.type,
     program: {

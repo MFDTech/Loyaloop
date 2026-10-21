@@ -6,7 +6,7 @@
 
 import * as engine from "./engine"
 import { DEFAULT_MISS_YOU_DAYS, MAX_NOTICE, MAX_PROMOTIONS_PER_DAY, NOTICE_EVENTS, PROMOTION_VARS, unknownVars, type Audience } from "./notices"
-import { defaultProgram } from "./seed"
+import { DEMO_BUSINESS_ID, DEMO_CODE, DEMO_RETENTION_DAYS, defaultProgram, demoBusiness } from "./seed"
 import type {
   Campaign,
   AuditEntry,
@@ -268,6 +268,8 @@ export interface PublicCard {
   contact: { email: string; phone: string }
   /** Registration asks for the mobile number and a code; otherwise only a name. */
   askPhone: boolean
+  /** LoyaLoop's public demo card. */
+  demo: boolean
 }
 
 export interface CardHolder {
@@ -1019,6 +1021,21 @@ export function createService(store: Store, ctx: Context) {
   async function tick(): Promise<{ sent: number }> {
     const global = await store.read("global")
     let sent = 0
+    // Demo cards keep a name for a few days only.
+    if (global.businesses.some((b) => b.id === DEMO_BUSINESS_ID)) {
+      const limit = now() - DEMO_RETENTION_DAYS * DAY
+      const demo = await store.read(B(DEMO_BUSINESS_ID))
+      if (demo.customers.some((c) => c.businessId === DEMO_BUSINESS_ID && c.name !== "Visitante" && new Date(c.createdAt).getTime() < limit))
+        await store.write(B(DEMO_BUSINESS_ID), (db) => {
+          for (const c of db.customers)
+            if (c.businessId === DEMO_BUSINESS_ID && c.name !== "Visitante" && new Date(c.createdAt).getTime() < limit) {
+              c.name = "Visitante"
+              c.email = ""
+              c.birthday = ""
+              c.cardLink = undefined
+            }
+        })
+    }
     for (const business of global.businesses.filter((b) => b.status !== "paused")) {
       await maintain(business.id)
       const db = await store.read(B(business.id))
@@ -1317,6 +1334,7 @@ export function createService(store: Store, ctx: Context) {
       rewards: db.rewards.filter((r) => r.businessId === businessId && r.active).map(({ id, name, cost, description }) => ({ id, name, cost, description })),
       contact: { email: business.email, phone: business.phone },
       askPhone: !!business.askPhone,
+      demo: !!business.demo,
     }
   }
 
@@ -1333,7 +1351,18 @@ export function createService(store: Store, ctx: Context) {
     }
   }
 
+  /** The public demo card's business, created the first time anyone needs it. */
+  async function ensureDemo() {
+    if (await store.business(DEMO_BUSINESS_ID)) return
+    const parts = demoBusiness(iso())
+    await store.write(B(DEMO_BUSINESS_ID), (db) => {
+      if (db.businesses.some((b) => b.id === DEMO_BUSINESS_ID)) return
+      for (const key of Object.keys(parts) as (keyof typeof parts)[]) (db[key] as unknown[]).push(...parts[key])
+    })
+  }
+
   async function branchByCode(code: string) {
+    if (typeof code === "string" && code.toUpperCase() === DEMO_CODE) await ensureDemo()
     const branch = typeof code === "string" && /^[A-Z0-9]{4,12}$/i.test(code) ? await store.branchByCode(code) : undefined
     if (!branch) throw new ApiError("Este enlace no corresponde a ninguna sucursal.", "not_found")
     const business = await store.business(branch.businessId)
@@ -1473,6 +1502,21 @@ export function createService(store: Store, ctx: Context) {
       }
     }
     return { ...rest, links }
+  }
+
+  /** Demo card: adds a stamp so the visitor sees the pass update and the notification. */
+  async function demoVisit(code: string, token: string): Promise<{ holder: CardHolder }> {
+    const { business } = await branchByCode(code)
+    if (!business.demo) throw new ApiError("Solo la tarjeta de demostración puede sumar sellos desde aquí.", "forbidden")
+    return store.write(B(business.id), (db) => {
+      const customer = db.customers.find((c) => c.businessId === business.id && c.token === normalizeToken(String(token || "")))
+      if (!customer) throw new ApiError("No encontramos esta tarjeta de demostración.", "not_found")
+      const mine = db.transactions.filter((t) => t.customerId === customer.id && t.kind === "visit")
+      if (mine[0] && now() - new Date(mine[0].createdAt).getTime() < 10_000) throw new ApiError("Espera unos segundos para que llegue el aviso del sello anterior.", "rate_limited")
+      if (mine.filter((t) => now() - new Date(t.createdAt).getTime() < DAY).length >= 20) throw new ApiError("Por hoy ya fueron suficientes visitas de prueba.", "rate_limited")
+      engine.demoVisit(db, customer, now())
+      return { holder: holder(db, customer) }
+    })
   }
 
   /** Card with only a name (or nickname): businesses that do not ask for the phone. */
@@ -1786,6 +1830,7 @@ export function createService(store: Store, ctx: Context) {
     completeRegistration,
     recoverCard,
     privacyNotice,
+    demoVisit,
     createCard,
     sendCardLink,
     openCardLink,
@@ -1811,7 +1856,7 @@ export const PUBLIC_METHODS = [
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
-  "registration", "privacyNotice", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
+  "registration", "privacyNotice", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 

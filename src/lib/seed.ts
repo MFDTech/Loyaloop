@@ -41,6 +41,51 @@ export function defaultProgram(businessId: string): Program {
   }
 }
 
+/** Public demo card: anyone can save it to their Wallet from the landing page. */
+export const DEMO_CODE = "DEMO"
+export const DEMO_BUSINESS_ID = "b_demo"
+/** Demo cards lose their name and contact data after this many days. */
+export const DEMO_RETENTION_DAYS = 7
+
+export function demoBusiness(createdAt: string): Pick<DB, "businesses" | "branches" | "registers" | "programs" | "rewards" | "integrations"> {
+  const id = DEMO_BUSINESS_ID
+  return {
+    businesses: [
+      {
+        id,
+        name: "Café de muestra",
+        sector: "Cafetería",
+        contactName: "LoyaLoop",
+        email: "privacidad@loyaloop.com.mx",
+        phone: "",
+        status: "active",
+        brand: { color: "#6B3E26", stampIcon: "coffee" },
+        discreet: false,
+        neutralName: "Café de muestra",
+        locationAlerts: false,
+        askPhone: false,
+        demo: true,
+        legalName: "LoyaLoop",
+        createdAt,
+      },
+    ],
+    branches: [{ id: "br_demo", businessId: id, name: "Demostración", address: "Tarjeta de demostración de LoyaLoop", code: DEMO_CODE, createdAt }],
+    registers: [{ id: "rg_demo", businessId: id, branchId: "br_demo", name: "Caja de demostración" }],
+    programs: [
+      {
+        ...defaultProgram(id),
+        type: "stamps",
+        stampGoal: 6,
+        stampRewardId: "rw_demo_cafe",
+        expirationMonths: 0,
+        notify: { stampEarned: true, almostThere: true, rewardAvailable: true },
+      },
+    ],
+    rewards: [{ id: "rw_demo_cafe", businessId: id, name: "Café de la casa", description: "Recompensa de demostración: no se canjea en ningún negocio.", cost: 0, active: true, createdAt }],
+    integrations: [],
+  }
+}
+
 export function createSeed(now = Date.now()): DB {
   const iso = (t: number) => new Date(t).toISOString()
   const ago = (days: number, hours = 0) => iso(now - days * DAY - hours * 3_600_000)

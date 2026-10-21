@@ -29,7 +29,9 @@ export function backFields(card: PublicCard) {
       ? { label: "Vigencia", value: `Los puntos vencen tras ${card.program.expirationMonths} meses sin actividad.` }
       : null,
     { label: "Contacto", value: [card.contact.email, card.contact.phone].filter(Boolean).join(" · ") || "En sucursal" },
-    { label: "Condiciones", value: "Muestra el código en caja antes o después de pagar. Los beneficios están sujetos a las condiciones del negocio." },
+    card.demo
+      ? { label: "Demostración", value: "Esta es una tarjeta de demostración de LoyaLoop: no sirve en ningún negocio. Conoce más en loyaloop.com.mx" }
+      : { label: "Condiciones", value: "Muestra el código en caja antes o después de pagar. Los beneficios están sujetos a las condiciones del negocio." },
   ]
   return fields.filter(Boolean) as { label: string; value: string }[]
 }

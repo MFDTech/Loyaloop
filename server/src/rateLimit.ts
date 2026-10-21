@@ -37,6 +37,8 @@ export const LIMITS: Record<string, { ip: [number, number]; arg?: [number, numbe
   createCard: { ip: [10, 10 * MIN] },
   sendCardLink: { ip: [5, 15 * MIN], arg: [3, 60 * MIN], argIndex: 1 },
   openCardLink: { ip: [30, 10 * MIN] },
+  demoVisit: { ip: [40, 10 * MIN] },
+  privacyNotice: { ip: [120, 10 * MIN] },
   registration: { ip: [120, 10 * MIN] },
   submitLead: { ip: [5, 60 * MIN] },
   pairDevice: { ip: [10, 10 * MIN] },

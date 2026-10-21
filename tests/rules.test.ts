@@ -240,6 +240,25 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("demo card", () => {
+      it("creates the demo business on first use and lets the visitor add stamps", async () => {
+        const reg = await api.registration("DEMO")
+        expect(reg.card).toMatchObject({ demo: true, type: "stamps", askPhone: false })
+        const made = await api.createCard("DEMO", { name: "Prospecto", email: "", birthday: "", promotions: false, privacy: true })
+        const first = await api.demoVisit("DEMO", made.holder.token)
+        expect(first.holder.stamps).toBe(1)
+        await expect(api.demoVisit("DEMO", made.holder.token)).rejects.toThrow(/segundos/)
+        advance(1)
+        expect((await api.demoVisit("DEMO", made.holder.token)).holder.stamps).toBe(2)
+        await expect(api.demoVisit("AFF7Q2", made.holder.token)).rejects.toThrow(/demostración/)
+        // After a week the card keeps its stamps but not the name.
+        advance(60 * 24 * 8)
+        await api.tick()
+        const again = await api.demoVisit("DEMO", made.holder.token)
+        expect(again.holder.name).toBe("Visitante")
+      })
+    })
+
     describe("registration", () => {
       it("names the business as responsible in its card's privacy notice", async () => {
         const before = await api.privacyNotice("AFF7Q2")

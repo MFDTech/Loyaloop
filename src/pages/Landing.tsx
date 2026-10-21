@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
-import { href } from "../lib/router"
+import { absoluteLink, href } from "../lib/router"
+import { DEMO_CODE } from "../lib/seed"
+import Qr from "../components/Qr"
 import RoiCalculator from "../components/RoiCalculator"
 import { Button, Icon, Logo, asset, type IconName } from "../components/ui"
 
@@ -172,8 +174,8 @@ export default function Landing() {
               <Button onClick={agenda}>
                 Agenda una llamada <Icon name="arrow" size={18} />
               </Button>
-              <Button secondary onClick={() => scrollToId("how-it-works")}>
-                Ver cómo funciona
+              <Button secondary onClick={() => scrollToId("demo")}>
+                Pruébala en tu celular
               </Button>
             </div>
           </div>
@@ -274,6 +276,21 @@ export default function Landing() {
             <span>
               <Icon name="store" /> Tu negocio
             </span>
+          </div>
+        </section>
+
+        <section id="demo" className="container ll-demo-section">
+          <div className="ll-demo-copy">
+            <span className="eyebrow">PRUÉBALA EN 20 SEGUNDOS</span>
+            <h2>Guarda una tarjeta de prueba en tu celular.</h2>
+            <p>Créala como lo haría tu cliente, agrégala a tu Wallet y simula una visita: verás el sello sumarse y el aviso llegar a tu pantalla.</p>
+            <a className="button ll-demo-mobile" href={href(`/r/${DEMO_CODE}`)}>
+              Crear mi tarjeta de prueba <Icon name="arrow" size={16} />
+            </a>
+          </div>
+          <div className="ll-demo-qr">
+            <Qr value={absoluteLink(`/r/${DEMO_CODE}`)} size={168} label="Código para crear una tarjeta de prueba en tu celular" />
+            <span>Escanéalo con la cámara de tu celular</span>
           </div>
         </section>
 

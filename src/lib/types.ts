@@ -47,6 +47,8 @@ export interface Business {
   discreet: boolean
   neutralName: string
   locationAlerts: boolean
+  /** LoyaLoop's public demo card: not a real business. */
+  demo?: boolean
   /** Who is responsible for the customers' data, as the privacy notice names it. */
   legalName?: string
   legalAddress?: string

@@ -264,6 +264,26 @@ export function creditVisit(db: DB, scan: Scan, device: Device, now: number): Tr
   return tx
 }
 
+/** Demo card only: the visitor simulates a visit from the registration page. */
+export function demoVisit(db: DB, customer: Customer, now: number): Transaction {
+  const program = programOf(db, customer.businessId)
+  const stamps = addStamp(db, customer, program, now)
+  const tx: Transaction = {
+    id: uid("t_"),
+    businessId: customer.businessId,
+    customerId: customer.id,
+    kind: "visit",
+    amount: 0,
+    points: 0,
+    stamps,
+    reason: "Visita de demostración",
+    createdAt: iso(now),
+  }
+  db.transactions.unshift(tx)
+  customer.lastActivityAt = iso(now)
+  return tx
+}
+
 /** Pending scans older than the window expire without points. */
 export function expireScans(db: DB, now: number) {
   for (const scan of db.scans)

@@ -154,6 +154,11 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
           )}
           {step === "form" && (
             <form className="ll-form" onSubmit={(e) => request(e, "new")} noValidate>
+              {card.demo && (
+                <Notice tone="info" title="Tarjeta de demostración">
+                  Así se registran los clientes de un negocio con LoyaLoop. Esta tarjeta no sirve en ningún negocio real.
+                </Notice>
+              )}
               <div>
                 <h2>Crea tu tarjeta</h2>
                 <ul className="ll-list" style={{ marginTop: 12 }}>
@@ -340,7 +345,37 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
   )
 }
 
-function Done({ card, holder, links, code }: { card: api.PublicCard; holder: api.CardHolder; links: api.WalletLinks; code: string }) {
+/** Demo card: the visitor adds stamps and sees the pass and the notification change. */
+function DemoVisit({ code, holder, onChange }: { code: string; holder: api.CardHolder; onChange: (h: api.CardHolder) => void }) {
+  const visit = useAction(api.demoVisit)
+  const [count, setCount] = useState(0)
+  return (
+    <div className="ll-demo-box">
+      <b>Prueba cómo se siente</b>
+      <p>Guarda la tarjeta en tu Wallet y luego toca el botón: es como si la caja escaneara tu tarjeta. En unos segundos te llega el aviso al celular.</p>
+      <Button
+        loading={visit.pending}
+        onClick={async () => {
+          const r = await visit.run(code, holder.token)
+          if (r.ok) {
+            onChange(r.value.holder)
+            setCount((c) => c + 1)
+          }
+        }}
+      >
+        Simular una visita
+      </Button>
+      {visit.error && <Notice tone="error">{visit.error}</Notice>}
+      {count > 0 && !visit.error && <Notice tone="success">Sumaste un sello. Revisa tu Wallet.</Notice>}
+      <a className="ll-link" href="#/">
+        ¿Lo quieres para tu negocio? Conoce LoyaLoop
+      </a>
+    </div>
+  )
+}
+
+function Done({ card, holder: initial, links, code }: { card: api.PublicCard; holder: api.CardHolder; links: api.WalletLinks; code: string }) {
+  const [holder, setHolder] = useState(initial)
   const [device] = useState(platform)
   const [clicked, setClicked] = useState<"" | "apple" | "google">("")
   const showApple = device !== "google"
@@ -375,6 +410,7 @@ function Done({ card, holder, links, code }: { card: api.PublicCard; holder: api
             : `Muy pronto podrás guardarla en ${clicked === "apple" ? "Apple" : "Google"} Wallet. Mientras tanto, toma una captura de este código y muéstralo en la caja.`}
         </Notice>
       )}
+      {card.demo && <DemoVisit code={code} holder={holder} onChange={setHolder} />}
       <div className="ll-reg-pass">{device === "google" ? <GooglePass card={card} holder={holder} /> : <ApplePass card={card} holder={holder} />}</div>
       {device === "desktop" && (
         <div className="ll-reg-desktop">

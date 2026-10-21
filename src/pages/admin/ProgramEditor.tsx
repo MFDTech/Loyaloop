@@ -268,6 +268,7 @@ export function draftCard(name: string, program: ProgramDraft, brand: BrandDraft
   return {
     businessName: brand.discreet ? brand.neutralName || "Mi tarjeta de beneficios" : name || "Tu negocio",
     askPhone: brand.askPhone,
+    demo: false,
     discreet: brand.discreet,
     brand: brand.brand,
     type: program.type,
