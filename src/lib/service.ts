@@ -1192,12 +1192,18 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone">>) {
+  async function adminUpdateBusiness(businessId: string, input: Partial<Pick<Business, "name" | "sector" | "contactName" | "email" | "phone" | "status" | "brand" | "discreet" | "neutralName" | "locationAlerts" | "askPhone" | "legalName" | "legalAddress" | "privacyEmail">>) {
     const a = await asAdmin()
-    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone"] as const
+    const allowed = ["name", "sector", "contactName", "email", "phone", "status", "brand", "discreet", "neutralName", "locationAlerts", "askPhone", "legalName", "legalAddress", "privacyEmail"] as const
     const patch: Record<string, unknown> = {}
     for (const key of allowed) if (input[key] !== undefined) patch[key] = input[key]
     if (patch.askPhone !== undefined) patch.askPhone = !!patch.askPhone
+    if (patch.legalName !== undefined) patch.legalName = text(patch.legalName, 160)
+    if (patch.legalAddress !== undefined) patch.legalAddress = text(patch.legalAddress, 300)
+    if (patch.privacyEmail !== undefined) {
+      patch.privacyEmail = text(patch.privacyEmail, 200).toLowerCase()
+      if (patch.privacyEmail && !isEmail(String(patch.privacyEmail))) throw new ApiError("El correo para privacidad no es válido.")
+    }
     if (patch.email !== undefined && !isEmail(String(patch.email))) throw new ApiError("El correo de contacto no es válido.")
     if (patch.name !== undefined && !text(patch.name)) throw new ApiError("El nombre no puede quedar vacío.")
     if (patch.status !== undefined && !["active", "trial", "paused"].includes(String(patch.status))) throw new ApiError("Estado no válido.")
@@ -1339,6 +1345,18 @@ export function createService(store: Store, ctx: Context) {
     const { branch, business } = await branchByCode(code)
     const db = await store.read(B(business.id))
     return { card: publicCard(db, business.id), branchName: business.discreet ? "" : branch.name }
+  }
+
+  /** What the card's privacy notice needs: who is responsible and how to reach them. */
+  async function privacyNotice(code: string): Promise<{ responsible: string; address: string; email: string; askPhone: boolean; promotions: boolean }> {
+    const { branch, business } = await branchByCode(code)
+    return {
+      responsible: business.legalName || business.name,
+      address: business.legalAddress || branch.address,
+      email: business.privacyEmail || business.email,
+      askPhone: !!business.askPhone,
+      promotions: !business.discreet,
+    }
   }
 
   async function sendCode(code: string, phoneInput: string, mode: "new" | "recover"): Promise<{ previewCode: string; existing: boolean; channel: CodeChannel | "preview" }> {
@@ -1767,6 +1785,7 @@ export function createService(store: Store, ctx: Context) {
     sendCode,
     completeRegistration,
     recoverCard,
+    privacyNotice,
     createCard,
     sendCardLink,
     openCardLink,
@@ -1792,7 +1811,7 @@ export const PUBLIC_METHODS = [
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
   "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
-  "registration", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
+  "registration", "privacyNotice", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
 ] as const satisfies readonly (keyof Service)[]
 
@@ -1801,5 +1820,5 @@ export type PublicMethod = (typeof PUBLIC_METHODS)[number]
 /** Calls that only read: the browser does not need to refresh other views after them. */
 export const READ_METHODS = new Set<string>([
   "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "campaigns", "campaignAudience", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "kiosk", "kioskScanStatus",
+  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "privacyNotice", "kiosk", "kioskScanStatus",
 ])

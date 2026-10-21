@@ -44,7 +44,7 @@ function Router() {
     case "caja":
       return <Kiosk code={second || ""} />
     case "legal":
-      return <Legal />
+      return <Legal code={second || ""} />
     case "panel":
       return <BusinessApp route={route} />
     case "admin":

@@ -47,6 +47,10 @@ export interface Business {
   discreet: boolean
   neutralName: string
   locationAlerts: boolean
+  /** Who is responsible for the customers' data, as the privacy notice names it. */
+  legalName?: string
+  legalAddress?: string
+  privacyEmail?: string
   createdAt: string
 }
 

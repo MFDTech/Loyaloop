@@ -69,7 +69,16 @@ export default function BusinessDetail({ id }: { id: string }) {
 
 function DataTab({ data }: { data: AdminBundle }) {
   const business = data.business
-  const [form, setForm] = useState({ name: business.name, sector: business.sector, contactName: business.contactName, email: business.email, phone: business.phone })
+  const [form, setForm] = useState({
+    name: business.name,
+    sector: business.sector,
+    contactName: business.contactName,
+    email: business.email,
+    phone: business.phone,
+    legalName: business.legalName || "",
+    legalAddress: business.legalAddress || "",
+    privacyEmail: business.privacyEmail || "",
+  })
   const [status, setStatus] = useState<BusinessStatus | null>(null)
   const save = useAction(api.adminUpdateBusiness)
   const toast = useToast()
@@ -83,6 +92,7 @@ function DataTab({ data }: { data: AdminBundle }) {
             onSubmit={async (e) => {
               e.preventDefault()
               if (!isEmail(form.email)) return save.setError("El correo de contacto no es válido.")
+              if (form.privacyEmail && !isEmail(form.privacyEmail)) return save.setError("El correo para privacidad no es válido.")
               const r = await save.run(business.id, form)
               if (r.ok) toast("Datos guardados.")
             }}
@@ -100,6 +110,10 @@ function DataTab({ data }: { data: AdminBundle }) {
               <Field label="Correo de contacto" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
               <Field label="Teléfono" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
+            <p className="ll-hint">Para el aviso de privacidad de su tarjeta: el negocio es el responsable de los datos de sus clientes.</p>
+            <Field label="Razón social o nombre del responsable" value={form.legalName} placeholder={business.name} onChange={(e) => set("legalName", e.target.value)} />
+            <Field label="Domicilio" value={form.legalAddress} placeholder="Si lo dejas vacío, se usa la dirección de la sucursal" onChange={(e) => set("legalAddress", e.target.value)} />
+            <Field label="Correo para privacidad" type="email" value={form.privacyEmail} placeholder={business.email} onChange={(e) => set("privacyEmail", e.target.value)} />
             {save.error && <Notice tone="error">{save.error}</Notice>}
             <div className="ll-form-actions">
               <Button type="submit" loading={save.pending}>

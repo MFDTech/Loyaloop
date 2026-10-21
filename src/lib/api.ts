@@ -238,6 +238,7 @@ export const markLead = method("markLead")
 export const simulatePayment = method("simulatePayment")
 
 export const registration = method("registration")
+export const privacyNotice = method("privacyNotice")
 export const sendCode = method("sendCode")
 export const completeRegistration = method("completeRegistration")
 export const recoverCard = method("recoverCard")

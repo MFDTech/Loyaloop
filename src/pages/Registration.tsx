@@ -85,7 +85,7 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
             <p>{info.error}</p>
             <p className="ll-hint">Pide ayuda en la caja: ahí pueden darte el enlace correcto.</p>
           </div>
-          <RegFoot />
+          <RegFoot code="" />
         </div>
       </div>
     )
@@ -206,7 +206,7 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
                 label={
                   <>
                     Acepto el{" "}
-                    <a className="ll-link" href={href("/legal")} target="_blank" rel="noreferrer" style={{ fontSize: "inherit" }}>
+                    <a className="ll-link" href={href(`/legal/${code}`)} target="_blank" rel="noreferrer" style={{ fontSize: "inherit" }}>
                       aviso de privacidad
                     </a>
                   </>
@@ -334,7 +334,7 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
 
           {step === "done" && result && <Done card={result.card} holder={result.holder} links={result.links} code={code} />}
         </div>
-        <RegFoot discreet={card.discreet} />
+        <RegFoot code={code} discreet={card.discreet} />
       </main>
     </div>
   )
@@ -386,12 +386,12 @@ function Done({ card, holder, links, code }: { card: api.PublicCard; holder: api
   )
 }
 
-function RegFoot({ discreet = false }: { discreet?: boolean }) {
+function RegFoot({ code, discreet = false }: { code: string; discreet?: boolean }) {
   return (
     <footer className="ll-reg-foot">
       {!discreet && <img src={asset("/brand/loyaloop-logo.svg")} alt="LoyaLoop" height={20} />}
       <span>
-        <a className="ll-link" href={href("/legal")} style={{ fontSize: 14 }}>
+        <a className="ll-link" href={href(code ? `/legal/${code}` : "/legal")} style={{ fontSize: 14 }}>
           Aviso de privacidad
         </a>
       </span>

@@ -241,6 +241,16 @@ for (const [label, make] of backends) {
     })
 
     describe("registration", () => {
+      it("names the business as responsible in its card's privacy notice", async () => {
+        const before = await api.privacyNotice("AFF7Q2")
+        expect(before).toMatchObject({ responsible: "Affair Love Suites", askPhone: false, promotions: false })
+        await admin()
+        await expect(api.adminUpdateBusiness("b_affair", { privacyEmail: "no-es-correo" })).rejects.toThrow(/privacidad/)
+        await api.adminUpdateBusiness("b_affair", { legalName: "Servicios Affair, S.A. de C.V.", legalAddress: "Calle Ejemplo 10, CDMX", privacyEmail: "Privacidad@Affair.test" })
+        expect(await api.privacyNotice("AFF7Q2")).toMatchObject({ responsible: "Servicios Affair, S.A. de C.V.", address: "Calle Ejemplo 10, CDMX", email: "privacidad@affair.test" })
+        expect((await api.privacyNotice("ESQR4M")).askPhone).toBe(true)
+      })
+
       it("creates the card with only a name; the welcome bonus waits for the first purchase", async () => {
         const reg = await api.registration("AFF7Q2")
         expect(reg.card.askPhone).toBe(false)
