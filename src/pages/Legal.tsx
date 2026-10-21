@@ -287,7 +287,7 @@ function LoyaloopNotice() {
             las solicitudes de sus clientes; nosotros le ayudamos.
           </li>
           <li>
-            <b>Precio y pago.</b> Se paga por adelantado, cada mes o cada año según el plan, más IVA, y se emite factura. Si un pago se atrasa más de 15 días,
+            <b>Precio y pago.</b> Se paga por adelantado, cada mes o cada año según el plan; los impuestos que en su caso apliquen se suman al precio. Si un pago se atrasa más de 15 días,
             avisamos y podemos suspender el servicio hasta que se regularice. Los cambios de precio se avisan con 30 días de anticipación.
           </li>
           <li>
