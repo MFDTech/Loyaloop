@@ -137,7 +137,7 @@ const FAQ: [string, string][] = [
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
   ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
-  ["¿Cómo empiezo con Starter?", "Creas tu cuenta en la página, pones tu logo, colores y recompensa, e imprimes el QR para tu mostrador. Nos escribes, te mandamos los datos para pagar y activamos tu tarjeta en cuanto lo recibamos. Sin plazo forzoso."],
+  ["¿Cómo empiezo con Starter?", "Agenda una llamada: te mostramos cómo funciona, creamos tu cuenta y tú pones tu logo, colores y recompensa. Imprimes el QR para tu mostrador y activamos tu tarjeta en cuanto recibamos tu pago. Sin plazo forzoso."],
   ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita. En Pro conectamos tu terminal de cobro y los puntos se suman solos según lo que pagan, sin que el cajero haga nada."],
 ]
 
@@ -175,6 +175,12 @@ export default function Landing() {
   }
 
   const agenda = () => scrollToId("agenda")
+
+  // Links from other pages (#/?s=agenda) land on a section.
+  useEffect(() => {
+    const section = window.location.hash.match(/[?&]s=([a-z]+)/)?.[1]
+    if (section) window.setTimeout(() => scrollToId(section), 50)
+  }, [])
 
   // The top bar stays visible; once the page moves it gets a solid background and a line.
   const [scrolled, setScrolled] = useState(false)
@@ -552,7 +558,7 @@ export default function Landing() {
             ¿Cuánto vale que <em>vuelvan una vez más?</em>
           </h2>
           <p className="ll-calc-lead">Mueve los números de tu negocio y ve cuánto suman unas pocas visitas extra al mes.</p>
-          <RoiCalculator onCall={agenda} onStart={() => navigate("/empezar")} />
+          <RoiCalculator onCall={agenda} />
         </section>
 
         <section id="pricing" className="section container pricing-section">
@@ -579,10 +585,10 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Button onClick={() => navigate("/empezar")}>
-                Crea tu cuenta <Icon name="arrow" size={16} />
+              <Button onClick={agenda}>
+                Agenda una llamada <Icon name="arrow" size={16} />
               </Button>
-              <small>Diseñas tu tarjeta hoy y la activamos en cuanto recibamos tu pago. Sin plazo forzoso.</small>
+              <small>Te mostramos cómo funciona y dejamos tu tarjeta lista. Sin plazo forzoso.</small>
             </article>
             <article className="ll-plan is-featured">
               <span className="ll-plan-tag">PUNTOS AUTOMÁTICOS</span>

@@ -51,7 +51,7 @@ function Slider(props: { label: string; value: number; min: number; max: number;
 }
 
 /** Landing calculator: how much a few extra visits are worth, in pesos. */
-export default function RoiCalculator({ onCall, onStart }: { onCall: () => void; onStart: () => void }) {
+export default function RoiCalculator({ onCall }: { onCall: () => void }) {
   const [kind, setKind] = useState<Kind>("cafe")
   const [clients, setClients] = useState(KINDS.cafe.clients)
   const [ticket, setTicket] = useState(KINDS.cafe.ticket)
@@ -105,15 +105,9 @@ export default function RoiCalculator({ onCall, onStart }: { onCall: () => void;
             {roi >= 1 ? ` · retorno ×${roi.toFixed(1)}` : ""}.
           </p>
         </div>
-        {planFor(kind, ticket) === "starter" ? (
-          <Button onClick={onStart}>
-            Crea tu cuenta <Icon name="arrow" size={16} />
-          </Button>
-        ) : (
-          <Button onClick={onCall}>
-            Agenda una llamada <Icon name="arrow" size={16} />
-          </Button>
-        )}
+        <Button onClick={onCall}>
+          Agenda una llamada <Icon name="arrow" size={16} />
+        </Button>
         <small className="ll-calc-note">Estimación orientativa con tus números. No incluye el costo de las recompensas que regales; el resultado depende de tu negocio y de cómo promuevas el programa.</small>
       </div>
     </div>

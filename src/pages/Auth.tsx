@@ -88,8 +88,8 @@ export function Login({ next }: { next: string }) {
         </a>
         <p className="ll-hint" style={{ textAlign: "center" }}>
           ¿Aún no tienes cuenta?{" "}
-          <a className="ll-link" href={href("/empezar")}>
-            Crea tu cuenta
+          <a className="ll-link" href={`${href("/")}?s=agenda`}>
+            Agenda una llamada
           </a>
         </p>
         {PREVIEW && (
