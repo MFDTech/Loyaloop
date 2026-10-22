@@ -47,7 +47,7 @@ export default function NewBusiness({ prospectId }: { prospectId?: string }) {
       .then((list) => {
         const p = list.find((x) => x.id === prospectId)
         if (!p) return
-        setInfo((i) => ({ ...i, name: p.name, sector: sectorOf(p.sector), contactName: p.contactName, email: p.email, phone: p.phone, ownerName: p.contactName, ownerEmail: p.email, plan: /pilates|barre|yoga|caf/i.test(p.sector) ? "starter" : i.plan }))
+        setInfo((i) => ({ ...i, name: p.name, sector: sectorOf(p.sector), contactName: p.contactName, email: p.email, phone: p.phone, ownerName: p.contactName, ownerEmail: p.email, plan: /pilates|barre|yoga/i.test(p.sector) ? "pro" : /caf/i.test(p.sector) ? "starter" : i.plan }))
         if (/pilates|barre|yoga|caf/i.test(p.sector)) setProgram((prog) => ({ ...prog, type: "stamps", stampMinPurchase: 0, tiers: [], dailyLimit: prog.dailyLimit || 1 }))
         if (p.address || p.zone) setBranches([{ name: p.zone || "Principal", address: p.address }])
       })

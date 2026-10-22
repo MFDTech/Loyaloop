@@ -609,7 +609,7 @@ export default function Landing() {
               <Button onClick={agenda}>
                 Agenda una llamada <Icon name="arrow" size={16} />
               </Button>
-              <small>Instalación gratis si pagas 3 meses por adelantado.</small>
+              <small>Instalación gratis si pagas 4 meses por adelantado.</small>
             </article>
           </div>
           <div className="ll-plan-extras">
@@ -621,7 +621,7 @@ export default function Landing() {
               </div>
               <div>
                 <dt>Instalación llave en mano</dt>
-                <dd>$1,500 una vez · gratis pagando 3 meses por adelantado</dd>
+                <dd>$1,500 una vez · gratis en Pro pagando 4 meses por adelantado</dd>
               </div>
               <div>
                 <dt>Gestión mensual</dt>
