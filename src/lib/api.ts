@@ -122,7 +122,8 @@ const localContext: Context = {
   baseUrl: typeof window === "undefined" ? "" : window.location.href.split("#")[0],
   messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined },
   online: () => typeof navigator === "undefined" || navigator.onLine !== false,
-  subscriptions: previewSubscriptions(),
+  // Automatic payment is off until LoyaLoop has its own Mercado Pago account; VITE_BILLING=true simulates it.
+  subscriptions: import.meta.env.VITE_BILLING === "true" ? previewSubscriptions() : undefined,
 }
 
 /** Preview: Mercado Pago is simulated. The card is "entered" right away and the first month is charged. */

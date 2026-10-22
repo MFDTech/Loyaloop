@@ -1483,7 +1483,9 @@ export function createService(store: Store, ctx: Context) {
       heading: `Bienvenido a LoyaLoop, ${ownerName.split(" ")[0]}`,
       paragraphs: [
         `Creamos la tarjeta de sellos de ${name}. En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.`,
-        "Para activarla, entra a «Plan y pagos» y paga con tarjeta a través de Mercado Pago ($390 al mes en automático). En cuanto se cobre, tus clientes pueden registrarse.",
+        ctx.subscriptions
+          ? "Para activarla, entra a «Plan y pagos» y paga con tarjeta a través de Mercado Pago ($390 al mes en automático). En cuanto se cobre, tus clientes pueden registrarse."
+          : "Para activarla, responde este correo o escríbenos a hola@loyaloop.com.mx y te mandamos los datos para pagar el plan Starter ($390 al mes). En cuanto lo recibamos, tus clientes pueden registrarse.",
       ],
       action: { label: "Entrar a mi panel", url: link("#/panel") },
     })
@@ -1681,7 +1683,7 @@ export function createService(store: Store, ctx: Context) {
         systemAudit(db, b.id, "Cerró la tarjeta por falta de pago", `Pagado hasta ${paidUntil.slice(0, 10)}`, now())
         return db.users.find((u) => u.businessId === b.id && u.role === "owner" && u.active)?.email
       })
-      if (owner) await sendEmail({ to: owner, subject: "Tu tarjeta de lealtad se pausó", heading: "Tu tarjeta ya no acepta clientes nuevos", paragraphs: ["No recibimos el pago de tu mensualidad. Tus clientes y su historial siguen guardados.", "Activa de nuevo tu pago automático para que tu tarjeta vuelva a funcionar."], action: { label: "Activar mi pago", url: link("#/panel/plan") } })
+      if (owner) await sendEmail({ to: owner, subject: "Tu tarjeta de lealtad se pausó", heading: "Tu tarjeta ya no acepta clientes nuevos", paragraphs: ["No recibimos el pago de tu mensualidad. Tus clientes y su historial siguen guardados.", "Activa de nuevo tu pago automático para que tu tarjeta vuelva a funcionar."], action: { label: "Ver mi plan", url: link("#/panel/plan") } })
       for (const to of await adminEmails()) await sendEmail({ to, subject: `Tarjeta cerrada por falta de pago: ${business.name}`, heading: "Un negocio dejó de pagar", paragraphs: [`${business.name} estaba pagado hasta el ${paidUntil.slice(0, 10)}.`] })
     }
   }

@@ -124,7 +124,7 @@ function TrialBanner({ business, owner }: { business?: api.Me["business"]; owner
   const action = owner ? (
     <p style={{ marginTop: 10 }}>
       <a className="ll-link" href={href("/panel/plan")}>
-        Activar con pago automático
+        Ver cómo pagar
       </a>
     </p>
   ) : null
@@ -133,8 +133,8 @@ function TrialBanner({ business, owner }: { business?: api.Me["business"]; owner
       <div style={{ marginBottom: 20 }}>
         <Notice tone="info" title={business.billing?.paidUntil ? "Tu tarjeta está pausada por falta de pago" : "Tu tarjeta está lista para activarse"}>
           {business.billing?.paidUntil
-            ? "Tus clientes y su historial siguen guardados. Activa de nuevo tu pago para que tu tarjeta vuelva a aceptar clientes."
-            : "Mientras, diseña tu tarjeta e imprime tu letrero. En cuanto pagues, tus clientes pueden registrarse."}
+            ? "Tus clientes y su historial siguen guardados. En cuanto recibamos tu pago, tu tarjeta vuelve a aceptar clientes."
+            : "Mientras, diseña tu tarjeta e imprime tu letrero. En cuanto recibamos tu pago, tus clientes pueden registrarse."}
           {action}
         </Notice>
       </div>
@@ -144,7 +144,7 @@ function TrialBanner({ business, owner }: { business?: api.Me["business"]; owner
   return (
     <div style={{ marginBottom: 20 }}>
       <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Prueba: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu prueba terminó"}>
-        {left > 0 ? "Activa tu pago automático para que tu tarjeta siga funcionando cuando termine." : "Tu tarjeta dejó de aceptar clientes nuevos. Activa tu pago para que vuelva a funcionar."}
+        {left > 0 ? "Para que tu tarjeta siga funcionando cuando termine, consulta cómo pagar tu plan." : "Tu tarjeta dejó de aceptar clientes nuevos. En cuanto recibamos tu pago, vuelve a funcionar."}
         {action}
       </Notice>
     </div>
