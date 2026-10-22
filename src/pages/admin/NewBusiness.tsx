@@ -22,7 +22,7 @@ interface RewardDraft {
 export default function NewBusiness() {
   const [step, setStep] = useState(0)
   const [problem, setProblem] = useState("")
-  const [info, setInfo] = useState({ name: "", sector: SECTORS[0], contactName: "", email: "", phone: "", status: "trial" as "trial" | "active", ownerName: "", ownerEmail: "" })
+  const [info, setInfo] = useState({ name: "", sector: SECTORS[0], contactName: "", email: "", phone: "", status: "pending" as "pending" | "trial" | "active", plan: "pro" as "starter" | "pro", ownerName: "", ownerEmail: "" })
   const [branches, setBranches] = useState([{ name: "", address: "" }])
   const [program, setProgram] = useState<ProgramDraft>(blankProgram())
   const [rewards, setRewards] = useState<RewardDraft[]>([{ name: "", cost: 500, description: "" }])
@@ -42,6 +42,7 @@ export default function NewBusiness() {
       if (!isEmail(info.ownerEmail)) return "Escribe el correo del dueño: ahí llega su invitación."
     }
     if (index === 1 && branches.some((b) => !b.name.trim())) return "Cada sucursal necesita un nombre."
+    if (index === 1 && info.plan === "starter" && branches.length > 1) return "El plan Starter incluye 1 sucursal. Quita las demás o elige Pro."
     if (index === 2) {
       if (program.type === "stamps" && !rewards[0]?.name.trim()) return "Escribe la recompensa que se gana al completar los sellos."
       if (program.type === "tiers" && program.tiers.some((t) => !t.name.trim())) return "Cada nivel necesita un nombre."
@@ -174,10 +175,25 @@ export default function NewBusiness() {
                     <Field label="Correo" type="email" value={info.ownerEmail} onChange={(e) => setInfoField("ownerEmail", e.target.value)} hint="Recibe la invitación al panel." />
                   </div>
                 </fieldset>
-                <SelectField label="Estado inicial" value={info.status} onChange={(e) => setInfoField("status", e.target.value)}>
-                  <option value="trial">En prueba (sin cobro)</option>
-                  <option value="active">Activo (se cobra por sucursal)</option>
-                </SelectField>
+                <div className="ll-grid-2">
+                  <SelectField
+                    label="Plan"
+                    value={info.plan}
+                    onChange={(e) => {
+                      const plan = e.target.value as "starter" | "pro"
+                      setInfo({ ...info, plan })
+                      if (plan === "starter") setProgram({ ...program, type: "stamps", stampMinPurchase: 0, tiers: [] })
+                    }}
+                  >
+                    <option value="pro">Pro ($990 al mes)</option>
+                    <option value="starter">Starter ($390 al mes)</option>
+                  </SelectField>
+                  <SelectField label="Estado inicial" value={info.status} onChange={(e) => setInfoField("status", e.target.value)}>
+                    <option value="pending">Por activar (espera su pago)</option>
+                    <option value="trial">En prueba (sin cobro)</option>
+                    <option value="active">Activo (ya pagó)</option>
+                  </SelectField>
+                </div>
               </>
             )}
 
@@ -191,17 +207,21 @@ export default function NewBusiness() {
                     <IconButton icon="trash" tone="danger" label={`Quitar la sucursal ${i + 1}`} disabled={branches.length === 1} onClick={() => setBranches(branches.filter((_, j) => j !== i))} />
                   </div>
                 ))}
-                <div>
-                  <Button variant="secondary" size="sm" onClick={() => setBranches([...branches, { name: "", address: "" }])}>
-                    <Icon name="plus" size={16} /> Agregar sucursal
-                  </Button>
-                </div>
+                {info.plan === "starter" ? (
+                  <p className="ll-hint">El plan Starter incluye 1 sucursal.</p>
+                ) : (
+                  <div>
+                    <Button variant="secondary" size="sm" onClick={() => setBranches([...branches, { name: "", address: "" }])}>
+                      <Icon name="plus" size={16} /> Agregar sucursal
+                    </Button>
+                  </div>
+                )}
               </>
             )}
 
             {step === 2 && (
               <>
-                <ProgramEditor value={program} onChange={setProgram} rewards={null} />
+                <ProgramEditor value={program} onChange={setProgram} rewards={null} starter={info.plan === "starter"} />
                 <fieldset className="ll-fieldset">
                   <legend>{program.type === "stamps" ? "Recompensa al completar la tarjeta" : "Recompensas"}</legend>
                   {program.type !== "stamps" && <p className="ll-hint">El cliente las canjea con sus puntos en la caja. El dueño puede editarlas después.</p>}
@@ -265,8 +285,12 @@ export default function NewBusiness() {
                     </dd>
                   </div>
                   <div>
+                    <dt>Plan</dt>
+                    <dd>{info.plan === "starter" ? "Starter" : "Pro"}</dd>
+                  </div>
+                  <div>
                     <dt>Estado</dt>
-                    <dd>{info.status === "trial" ? "En prueba" : "Activo"}</dd>
+                    <dd>{info.status === "pending" ? "Por activar" : info.status === "trial" ? "En prueba" : "Activo"}</dd>
                   </div>
                 </dl>
               </>

@@ -265,7 +265,9 @@ export interface NewBusiness {
   contactName: string
   email: string
   phone: string
-  status: "active" | "trial"
+  status: "pending" | "active" | "trial"
+  /** Starter: one branch and a stamps card the owner edits. Unset: Pro. */
+  plan?: "starter" | "pro"
   branches: { name: string; address: string }[]
   program: Omit<Program, "businessId">
   rewards: { name: string; cost: number; description: string }[]
@@ -1229,13 +1231,18 @@ export function createService(store: Store, ctx: Context) {
     const ownerEmail = text(input.ownerEmail, 200).toLowerCase()
     if (!isEmail(ownerEmail)) throw new ApiError("El correo del dueño no es válido.")
     if (await store.emailTaken(ownerEmail)) throw new ApiError("Ya existe una cuenta con el correo del dueño.")
+    const plan = input.plan === "starter" ? "starter" : "pro"
+    if (plan === "starter") {
+      if (input.branches.length > 1) throw new ApiError("El plan Starter incluye 1 sucursal.")
+      if (input.program.type !== "stamps") throw new ApiError("En el plan Starter la tarjeta es de sellos.")
+    }
     validateProgram(input.program)
     const id = uid("b_")
     const token = readableCode(32)
     await store.write(B(id), (db) => {
       const created = iso()
       const discreet = !!input.discreet
-      db.businesses.push({ id, name, sector: text(input.sector, 60), contactName: text(input.contactName, 80), email: text(input.email, 200), phone: normalizePhone(input.phone || ""), status: input.status === "active" ? "active" : "trial", brand: input.brand, discreet, neutralName: text(input.neutralName, 40) || "Mi tarjeta de beneficios", locationAlerts: discreet ? false : !!input.locationAlerts, askPhone: !!input.askPhone, createdAt: created })
+      db.businesses.push({ id, name, sector: text(input.sector, 60), contactName: text(input.contactName, 80), email: text(input.email, 200), phone: normalizePhone(input.phone || ""), status: input.status === "active" ? "active" : input.status === "pending" ? "pending" : "trial", plan, brand: input.brand, discreet, neutralName: text(input.neutralName, 40) || "Mi tarjeta de beneficios", locationAlerts: discreet ? false : !!input.locationAlerts, askPhone: !!input.askPhone, createdAt: created })
       for (const b of input.branches) {
         const branchId = uid("br_")
         db.branches.push({ id: branchId, businessId: id, name: text(b.name, 80), address: text(b.address, 200), code: readableCode(6), createdAt: created })
@@ -1251,7 +1258,7 @@ export function createService(store: Store, ctx: Context) {
       for (const provider of ["mercadopago", "clip"] as Provider[])
         db.integrations.push({ businessId: id, provider, status: input.provider === provider ? "connected" : "not_connected", connectedAt: input.provider === provider ? created : undefined })
       db.users.push({ id: uid("u_"), name: text(input.ownerName, 80) || text(input.contactName, 80), email: ownerEmail, password: "", role: "owner", businessId: id, excludedFromEarning: false, active: true, inviteToken: token, createdAt: created })
-      audit(db, a, id, "Dio de alta el negocio", `${input.branches.length} sucursal(es), tarjeta de ${input.program.type}`, now())
+      audit(db, a, id, "Dio de alta el negocio", `Plan ${plan === "starter" ? "Starter" : "Pro"}, ${input.branches.length} sucursal(es), tarjeta de ${input.program.type}`, now())
     })
     const path = `#/invitacion/${token}`
     await sendEmail({

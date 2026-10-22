@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import type { Service } from "../src/lib/service"
 import { csv, normalizeToken } from "../src/lib/util"
 import { TEST_DATABASE_URL, memoryHarness, pgHarness, type Harness } from "./harness"
+import { defaultProgram } from "../src/lib/seed"
 
 const T0 = new Date("2026-10-13T12:00:00-06:00").getTime()
 let t = T0
@@ -315,6 +316,26 @@ for (const [label, make] of backends) {
         await expect(api.registration(code)).rejects.toThrow(/no está disponible/)
         await api.adminUpdateBusiness(me.business!.id, { status: "active" })
         expect((await api.registration(code)).card.businessName).toBe("Panadería Sol")
+      })
+    })
+
+    describe("businesses created by LoyaLoop", () => {
+      it("creates a Starter business waiting for its payment", async () => {
+        await admin()
+        const { businessId: _b, ...program } = defaultProgram("x")
+        const input = {
+          name: "Barbería Norte", sector: "Estética o barbería", contactName: "Luis", email: "luis@norte.test", phone: "", status: "pending" as const, plan: "starter" as const,
+          branches: [{ name: "Centro", address: "" }], program: { ...program, type: "stamps" as const, stampGoal: 6 }, rewards: [{ name: "Corte gratis", cost: 0, description: "" }], stampRewardIndex: 0,
+          brand: { color: "#1F6F5C" }, discreet: false, neutralName: "", locationAlerts: false, ownerName: "Luis", ownerEmail: "luis@norte.test",
+        }
+        await expect(api.createBusiness({ ...input, branches: [{ name: "A", address: "" }, { name: "B", address: "" }] })).rejects.toThrow(/1 sucursal/)
+        await expect(api.createBusiness({ ...input, program: { ...input.program, type: "points" } })).rejects.toThrow(/sellos/)
+        const { id } = await api.createBusiness(input)
+        const bundle = await api.adminBundle(id)
+        expect(bundle.business).toMatchObject({ plan: "starter", status: "pending" })
+        await expect(api.registration(bundle.branches[0].code)).rejects.toThrow(/no está disponible/)
+        await api.adminUpdateBusiness(id, { status: "active" })
+        expect((await api.registration(bundle.branches[0].code)).card.businessName).toBe("Barbería Norte")
       })
     })
 
