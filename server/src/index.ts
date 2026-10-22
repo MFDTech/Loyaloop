@@ -22,8 +22,8 @@ const messenger = createMessenger(config)
 if (!messenger.channels.email) console.warn("[aviso] Correo sin configurar (RESEND_API_KEY): invitaciones y contraseñas solo quedan en el registro.")
 if (messenger.code) console.log(`[codigo] WhatsApp de Meta activo (plantilla ${config.whatsappTemplate})`)
 else if (messenger.verifier) console.log(`[sms] Twilio Verify activo (${config.twilioVerifyChannel})`)
-else if (!config.preview) console.warn("[aviso] Sin proveedor de SMS y con PREVIEW=false: los clientes no pueden registrarse. Usa PREVIEW=true mientras tanto.")
-else console.warn("[aviso] Códigos de registro en pantalla (PREVIEW=true): configura Twilio Verify antes de abrir a clientes.")
+else if (!config.preview) console.warn("[aviso] Sin proveedor de SMS o WhatsApp: los negocios con «Pedir celular al registrarse» no pueden registrar clientes (el registro con solo nombre funciona).")
+else console.warn("[aviso] Códigos de registro en pantalla (PREVIEW=true): configura un proveedor antes de pedir celular a los clientes.")
 if (config.simulator) console.warn("[aviso] El simulador de cobros está encendido (SIMULATOR=true). Apágalo en producción.")
 
 let google: GoogleWallet | null = null

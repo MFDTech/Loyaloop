@@ -324,14 +324,16 @@ export function AcceptInvite({ token }: { token: string }) {
   )
 }
 
-export function InviteLinkNotice({ link, email }: { link: string; email: string }) {
+export function InviteLinkNotice({ link, email, emailed }: { link: string; email: string; emailed?: boolean }) {
   const full = `${window.location.href.split("#")[0]}${link}`
   return (
     <Notice tone="success" title="Invitación lista">
       <p style={{ marginBottom: 10 }}>
         {PREVIEW
           ? `Cuando el servidor esté conectado se enviará por correo a ${email}. Por ahora, comparte este enlace:`
-          : `Enviamos la invitación a ${email}. También puedes compartir este enlace:`}
+          : emailed === false
+            ? `No se pudo enviar el correo a ${email}. Comparte este enlace por WhatsApp o correo:`
+            : `Enviamos la invitación a ${email}. También puedes compartir este enlace:`}
       </p>
       <div className="ll-code-box">
         <code>{full}</code>

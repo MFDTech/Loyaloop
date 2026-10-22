@@ -924,7 +924,7 @@ export function createService(store: Store, ctx: Context) {
     return db.users.filter((u) => u.businessId === a.businessId).map((u) => (a.role === "owner" ? publicUser(u) : { ...publicUser(u), inviteToken: undefined }))
   }
 
-  async function inviteMember(input: { name: string; email: string; role: Role; phone: string; excluded: boolean; branchId?: string }): Promise<{ link: string }> {
+  async function inviteMember(input: { name: string; email: string; role: Role; phone: string; excluded: boolean; branchId?: string }): Promise<{ link: string; emailed: boolean }> {
     const a = await inBusiness(["owner"])
     const name = text(input.name, 80)
     const email = text(input.email, 200).toLowerCase()
@@ -942,7 +942,7 @@ export function createService(store: Store, ctx: Context) {
       return db.businesses.find((b) => b.id === a.businessId)!.name
     })
     const path = `#/invitacion/${token}`
-    await sendEmail({
+    const emailed = await sendEmail({
       to: email,
       subject: `Te invitaron al panel de ${businessName}`,
       heading: `Bienvenido al equipo de ${businessName}`,
@@ -950,7 +950,7 @@ export function createService(store: Store, ctx: Context) {
       action: { label: "Crear mi contraseña", url: link(path) },
       footnote: "Si no esperabas esta invitación, ignora este correo.",
     })
-    return { link: path }
+    return { link: path, emailed }
   }
 
   async function updateMember(id: string, input: { role: Role; phone: string; excluded: boolean; active: boolean; branchId?: string }) {
@@ -1222,7 +1222,7 @@ export function createService(store: Store, ctx: Context) {
     }
   }
 
-  async function createBusiness(input: NewBusiness): Promise<{ id: string; inviteLink: string }> {
+  async function createBusiness(input: NewBusiness): Promise<{ id: string; inviteLink: string; emailed: boolean }> {
     const a = await asAdmin()
     const name = text(input.name, 60)
     if (!name) throw new ApiError("Escribe el nombre del negocio.")
@@ -1261,14 +1261,14 @@ export function createService(store: Store, ctx: Context) {
       audit(db, a, id, "Dio de alta el negocio", `Plan ${plan === "starter" ? "Starter" : "Pro"}, ${input.branches.length} sucursal(es), tarjeta de ${input.program.type}`, now())
     })
     const path = `#/invitacion/${token}`
-    await sendEmail({
+    const emailed = await sendEmail({
       to: ownerEmail,
       subject: `Tu panel de LoyaLoop para ${name}`,
       heading: "Tu tarjeta de lealtad está lista",
       paragraphs: [`Hola, ${text(input.ownerName, 80) || text(input.contactName, 80)}.`, `Ya configuramos la tarjeta de lealtad de ${name}. Crea tu contraseña para ver a tus clientes, sus visitas y sus recompensas.`],
       action: { label: "Entrar a mi panel", url: link(path) },
     })
-    return { id, inviteLink: path }
+    return { id, inviteLink: path, emailed }
   }
 
   async function adminSaveProgram(businessId: string, program: Omit<Program, "businessId">) {

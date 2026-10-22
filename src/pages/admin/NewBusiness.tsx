@@ -28,7 +28,7 @@ export default function NewBusiness() {
   const [rewards, setRewards] = useState<RewardDraft[]>([{ name: "", cost: 500, description: "" }])
   const [brand, setBrand] = useState<BrandDraft>({ brand: { color: "#8A2E12" }, discreet: false, neutralName: "", locationAlerts: true, askPhone: false })
   const [provider, setProvider] = useState<"" | Provider>("")
-  const [created, setCreated] = useState<{ id: string; inviteLink: string } | null>(null)
+  const [created, setCreated] = useState<{ id: string; inviteLink: string; emailed: boolean } | null>(null)
   const create = useAction(api.createBusiness)
 
   const card = draftCard(info.name, program, brand, rewards)
@@ -94,7 +94,7 @@ export default function NewBusiness() {
         <PageHeader title="Negocio dado de alta" description={`${info.name} ya tiene su tarjeta configurada.`} />
         <Card title="Siguiente paso: invita al dueño">
           <div className="ll-stack">
-            <InviteLinkNotice link={created.inviteLink} email={info.ownerEmail} />
+            <InviteLinkNotice link={created.inviteLink} email={info.ownerEmail} emailed={created.emailed} />
             <ul className="ll-list">
               <li className="ll-perk">
                 <Icon name="nfc" size={18} /> Graba el enlace de registro de cada sucursal en su etiqueta NFC desde la ficha del negocio.
@@ -182,7 +182,7 @@ export default function NewBusiness() {
                     onChange={(e) => {
                       const plan = e.target.value as "starter" | "pro"
                       setInfo({ ...info, plan })
-                      if (plan === "starter") setProgram({ ...program, type: "stamps", stampMinPurchase: 0, tiers: [] })
+                      if (plan === "starter") setProgram({ ...program, type: "stamps", stampMinPurchase: 0, tiers: [], dailyLimit: program.dailyLimit || 1 })
                     }}
                   >
                     <option value="pro">Pro ($990 al mes)</option>

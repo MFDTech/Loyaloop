@@ -121,6 +121,22 @@ for (const [label, make] of backends) {
         await expect(api.kioskScan(c.token)).rejects.toThrow(/límite/)
       })
 
+      it("flags a card that buys far more often than the average", async () => {
+        const c = await affairCustomer(2)
+        for (let day = 0; day < 12; day++) {
+          useAffairTablet()
+          await api.kioskScan(c.token)
+          await admin()
+          expect((await api.simulatePayment("b_affair", "rg_affair_1", 300, 0)).kind).toBe("matched")
+          advance(60 * 24)
+        }
+        await as("dueno@affair.test")
+        const flagged = await api.suspicious()
+        expect(flagged.map((s) => s.id)).toContain(c.id)
+        await as("cajero@affair.test")
+        await expect(api.suspicious()).rejects.toThrow()
+      })
+
       it("rejects employees that are excluded, recognized by their email", async () => {
         // The cashier makes a card with their work email, then scans it.
         const result = await api.createCard("AFF7Q2", { name: "Recepción", email: "Cajero@affair.test", birthday: "", promotions: false, privacy: true })
