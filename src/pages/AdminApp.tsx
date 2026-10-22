@@ -23,7 +23,7 @@ export default function AdminApp({ route }: { route: Route }) {
     if (me?.user.role !== "admin" || me.impersonating) return 0
     const d = new Date()
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-    return (await api.prospects()).filter((p) => p.stage !== "won" && p.stage !== "lost" && p.nextDate && p.nextDate <= today).length
+    return (await api.prospects()).filter((p) => p.stage !== "won" && p.nextDate && p.nextDate <= today).length
   })
   const me = session.data
   const section = route.parts[1] || ""

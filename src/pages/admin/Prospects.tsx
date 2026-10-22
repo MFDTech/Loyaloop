@@ -16,8 +16,8 @@ const today = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
-const open = (p: Prospect) => p.stage !== "won" && p.stage !== "lost"
-const due = (p: Prospect) => open(p) && !!p.nextDate && p.nextDate <= today()
+/** A follow-up is due on its date, except for prospects already won («No por ahora» can carry a date to try again). */
+const due = (p: Prospect) => p.stage !== "won" && !!p.nextDate && p.nextDate <= today()
 const shortDate = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
 const whatsapp = (phone: string) => `https://wa.me/52${phone}`
 
