@@ -10,7 +10,7 @@ import type { DB, Session } from "./types"
 
 export { ApiError }
 export type * from "./service"
-export type { AuditEntry, Campaign } from "./types"
+export type { AuditEntry, Campaign, Prospect, ProspectStage } from "./types"
 export type { Audience, AutomaticEvent, NoticeEvent } from "./notices"
 
 const API_URL: string | undefined = import.meta.env.VITE_API_URL
@@ -287,6 +287,10 @@ export const demoCard = method("demoCard")
 export const signupBusiness = method("signupBusiness")
 export const saveCard = method("saveCard")
 export const billing = method("billing")
+export const prospects = method("prospects")
+export const saveProspect = method("saveProspect")
+export const addProspectNote = method("addProspectNote")
+export const deleteProspect = method("deleteProspect")
 export const startSubscription = method("startSubscription")
 export const refreshBilling = method("refreshBilling")
 export const cancelSubscription = method("cancelSubscription")

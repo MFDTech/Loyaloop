@@ -322,6 +322,38 @@ export interface Lead {
   createdAt: string
 }
 
+/** Where a prospect is in the sale, from the first visit to a paying business. */
+export type ProspectStage = "to_visit" | "visited" | "demo" | "trial" | "won" | "lost"
+
+/** A business LoyaLoop wants to sell to (LoyaLoop's own sales list, admin only). */
+export interface Prospect {
+  id: string
+  name: string
+  /** Giro: pilates, barre, café... */
+  sector: string
+  /** Colonia or area, to plan visit routes. */
+  zone: string
+  address: string
+  contactName: string
+  /** WhatsApp or phone, 10 digits. */
+  phone: string
+  email: string
+  instagram: string
+  /** Google Maps or website link. */
+  link: string
+  stage: ProspectStage
+  nextStep: string
+  /** YYYY-MM-DD */
+  nextDate: string
+  notes: string
+  /** Contact history, newest first. */
+  log: { at: string; text: string; by: string }[]
+  /** Set when the prospect became a LoyaLoop business. */
+  businessId?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Session {
   userId: string
   /** Set when the admin enters a business account. */
@@ -348,6 +380,7 @@ export interface DB {
   campaigns: Campaign[]
   audit: AuditEntry[]
   leads: Lead[]
+  prospects: Prospect[]
   verifications: { phone: string; businessId: string; code: string; attempts: number; expiresAt: string; sentAt: string }[]
   resets: { token: string; userId: string; expiresAt: string }[]
   /** Last time the daily job ran for each business. */

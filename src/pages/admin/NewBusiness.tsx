@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import * as api from "../../lib/api"
 import { useAction } from "../../lib/hooks"
 import { href, navigate } from "../../lib/router"
@@ -9,7 +9,7 @@ import { PassPreview, sampleHolder } from "../../components/Pass"
 import { Button, Card, Field, Icon, IconButton, Notice, PageHeader, SelectField } from "../../components/ui"
 import { BrandEditor, NumberField, ProgramEditor, blankProgram, draftCard, type BrandDraft, type ProgramDraft } from "./ProgramEditor"
 
-export const SECTORS = ["Cafetería", "Restaurante", "Bar", "Panadería", "Hotel o motel", "Salón o estética", "Gimnasio o estudio", "Tienda", "Otro"]
+export const SECTORS = ["Cafetería", "Restaurante", "Bar", "Panadería", "Hotel o motel", "Salón o estética", "Estudio de pilates o barre", "Gimnasio o estudio", "Tienda", "Otro"]
 
 const STEPS = ["Negocio", "Sucursales", "Tarjeta", "Marca", "Cobro y alta"] as const
 
@@ -19,7 +19,15 @@ interface RewardDraft {
   description: string
 }
 
-export default function NewBusiness() {
+/** Giro of a prospect as the business form names it. */
+function sectorOf(prospectSector: string) {
+  if (/pilates|barre/i.test(prospectSector)) return "Estudio de pilates o barre"
+  if (/yoga|gimnasio|box/i.test(prospectSector)) return "Gimnasio o estudio"
+  if (/barber|estétic/i.test(prospectSector)) return "Salón o estética"
+  return SECTORS.find((s) => s.toLowerCase() === prospectSector.toLowerCase()) || "Otro"
+}
+
+export default function NewBusiness({ prospectId }: { prospectId?: string }) {
   const [step, setStep] = useState(0)
   const [problem, setProblem] = useState("")
   const [info, setInfo] = useState({ name: "", sector: SECTORS[0], contactName: "", email: "", phone: "", status: "pending" as "pending" | "trial" | "active", plan: "pro" as "starter" | "pro", ownerName: "", ownerEmail: "" })
@@ -30,6 +38,21 @@ export default function NewBusiness() {
   const [provider, setProvider] = useState<"" | Provider>("")
   const [created, setCreated] = useState<{ id: string; inviteLink: string; emailed: boolean } | null>(null)
   const create = useAction(api.createBusiness)
+
+  // Coming from a prospect: start with what is already known about it.
+  useEffect(() => {
+    if (!prospectId) return
+    api
+      .prospects()
+      .then((list) => {
+        const p = list.find((x) => x.id === prospectId)
+        if (!p) return
+        setInfo((i) => ({ ...i, name: p.name, sector: sectorOf(p.sector), contactName: p.contactName, email: p.email, phone: p.phone, ownerName: p.contactName, ownerEmail: p.email, plan: /pilates|barre|yoga|caf/i.test(p.sector) ? "starter" : i.plan }))
+        if (/pilates|barre|yoga|caf/i.test(p.sector)) setProgram((prog) => ({ ...prog, type: "stamps", stampMinPurchase: 0, tiers: [], dailyLimit: prog.dailyLimit || 1 }))
+        if (p.address || p.zone) setBranches([{ name: p.zone || "Principal", address: p.address }])
+      })
+      .catch(() => undefined)
+  }, [prospectId])
 
   const card = draftCard(info.name, program, brand, rewards)
   const setInfoField = (key: keyof typeof info, value: string) => setInfo({ ...info, [key]: value })
@@ -81,6 +104,7 @@ export default function NewBusiness() {
       locationAlerts: brand.locationAlerts,
       askPhone: brand.askPhone,
       provider: provider || undefined,
+      prospectId: prospectId || undefined,
     })
     if (r.ok) {
       setCreated(r.value)

@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from "react"
 import { Button, Icon } from "./ui"
 
-type Kind = "cafe" | "beauty" | "motel" | "store"
+type Kind = "studio" | "cafe" | "beauty" | "motel" | "store"
 type PlanId = "starter" | "pro" | "proGestion"
 
 /** Plan prices (MXN per month for one branch), as the landing shows them. */
@@ -12,6 +12,7 @@ export const PLANS: Record<PlanId, { name: string; price: number; pitch: string 
 }
 
 const KINDS: Record<Kind, { label: string; clients: number; ticket: number }> = {
+  studio: { label: "Pilates, barre o yoga", clients: 150, ticket: 250 },
   cafe: { label: "Café o restaurante", clients: 600, ticket: 120 },
   beauty: { label: "Estética o barbería", clients: 250, ticket: 350 },
   motel: { label: "Motel u hotel", clients: 800, ticket: 650 },
@@ -22,6 +23,7 @@ const money = (n: number) => `$${Math.round(n).toLocaleString("es-MX")}`
 
 function planFor(kind: Kind, ticket: number): PlanId {
   if (kind === "motel") return "proGestion"
+  if (kind === "studio") return "starter"
   return ticket < 200 ? "starter" : "pro"
 }
 
@@ -52,9 +54,9 @@ function Slider(props: { label: string; value: number; min: number; max: number;
 
 /** Landing calculator: how much a few extra visits are worth, in pesos. */
 export default function RoiCalculator({ onCall }: { onCall: () => void }) {
-  const [kind, setKind] = useState<Kind>("cafe")
-  const [clients, setClients] = useState(KINDS.cafe.clients)
-  const [ticket, setTicket] = useState(KINDS.cafe.ticket)
+  const [kind, setKind] = useState<Kind>("studio")
+  const [clients, setClients] = useState(KINDS.studio.clients)
+  const [ticket, setTicket] = useState(KINDS.studio.ticket)
   const [rate, setRate] = useState(8)
 
   const extraVisits = Math.round((clients * rate) / 100)

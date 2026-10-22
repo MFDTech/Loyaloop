@@ -20,6 +20,8 @@ import type {
   DB,
   Device,
   Lead,
+  Prospect,
+  ProspectStage,
   Payment,
   Program,
   Provider,
@@ -280,6 +282,8 @@ export interface NewBusiness {
   provider?: Provider
   ownerName: string
   ownerEmail: string
+  /** The prospect this business came from, to close it in the sales list. */
+  prospectId?: string
 }
 
 export interface GlobalMetrics {
@@ -418,6 +422,9 @@ export function validateProgram(p: Omit<Program, "businessId">) {
     if (!p.tiers.some((t) => t.threshold === 0)) throw new ApiError("El primer nivel debe empezar en $0.")
   }
 }
+
+/** Prospect stages as the admin shows them. */
+export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "En prueba", won: "Cliente", lost: "No por ahora" }
 
 /** Monthly prices in MXN, as the website shows them. */
 export const PRICES = { starter: 390, pro: 990, extraBranch: 250 } as const
@@ -1260,6 +1267,15 @@ export function createService(store: Store, ctx: Context) {
       db.users.push({ id: uid("u_"), name: text(input.ownerName, 80) || text(input.contactName, 80), email: ownerEmail, password: "", role: "owner", businessId: id, excludedFromEarning: false, active: true, inviteToken: token, createdAt: created })
       audit(db, a, id, "Dio de alta el negocio", `Plan ${plan === "starter" ? "Starter" : "Pro"}, ${input.branches.length} sucursal(es), tarjeta de ${input.program.type}`, now())
     })
+    if (input.prospectId)
+      await store.write("global", (db) => {
+        const p = (db.prospects || []).find((x) => x.id === input.prospectId)
+        if (!p) return
+        p.businessId = id
+        p.stage = input.status === "active" ? "won" : "trial"
+        p.log.unshift({ at: iso(), text: `Dado de alta en LoyaLoop (plan ${plan === "starter" ? "Starter" : "Pro"})`, by: a.user.name })
+        p.updatedAt = iso()
+      })
     const path = `#/invitacion/${token}`
     const emailed = await sendEmail({
       to: ownerEmail,
@@ -1369,6 +1385,88 @@ export function createService(store: Store, ctx: Context) {
     const db = await store.read("global")
     const entries = await store.audit({ limit: 200 })
     return entries.map((e) => ({ ...e, business: db.businesses.find((b) => b.id === e.businessId)?.name }))
+  }
+
+  // ------------------------------------------------------------ prospects (LoyaLoop's sales list)
+
+  const STAGES: ProspectStage[] = ["to_visit", "visited", "demo", "trial", "won", "lost"]
+
+  async function prospects(): Promise<Prospect[]> {
+    await asAdmin()
+    return (await store.read("global")).prospects || []
+  }
+
+  /** Creates or edits a prospect. A first note goes to its history. */
+  async function saveProspect(input: Partial<Omit<Prospect, "log" | "createdAt" | "updatedAt">> & { note?: string }): Promise<Prospect> {
+    const a = await asAdmin()
+    const name = text(input.name, 80)
+    if (!name) throw new ApiError("Escribe el nombre del negocio.")
+    const email = text(input.email, 200).toLowerCase()
+    if (email && !isEmail(email)) throw new ApiError("El correo no es válido.")
+    const phoneRaw = text(input.phone, 30)
+    const phone = phoneRaw ? normalizePhone(phoneRaw) : ""
+    if (phoneRaw && phone.length !== 10) throw new ApiError("El teléfono debe tener 10 dígitos.")
+    const stage = STAGES.includes(input.stage as ProspectStage) ? (input.stage as ProspectStage) : "to_visit"
+    const nextDate = text(input.nextDate, 10)
+    if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) throw new ApiError("La fecha del siguiente paso no es válida.")
+    const link = text(input.link, 500)
+    if (link && !/^https?:\/\//i.test(link)) throw new ApiError("El enlace debe empezar con https://")
+    const fields = {
+      name,
+      sector: text(input.sector, 60),
+      zone: text(input.zone, 80),
+      address: text(input.address, 200),
+      contactName: text(input.contactName, 80),
+      phone,
+      email,
+      instagram: text(input.instagram, 60).replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, ""),
+      link,
+      stage,
+      nextStep: text(input.nextStep, 200),
+      nextDate,
+      notes: text(input.notes, 2000),
+    }
+    const note = text(input.note, 500)
+    return store.write("global", (db) => {
+      db.prospects = db.prospects || []
+      const at = iso()
+      if (input.id) {
+        const p = db.prospects.find((x) => x.id === input.id)
+        if (!p) throw new ApiError("No encontramos ese prospecto.", "not_found")
+        if (p.stage !== stage) p.log.unshift({ at, text: `Etapa: ${STAGE_LABEL[p.stage]} → ${STAGE_LABEL[stage]}`, by: a.user.name })
+        Object.assign(p, fields, { updatedAt: at })
+        if (note) p.log.unshift({ at, text: note, by: a.user.name })
+        return p
+      }
+      const duplicate = db.prospects.find((x) => x.name.toLowerCase() === name.toLowerCase() && x.zone.toLowerCase() === fields.zone.toLowerCase())
+      if (duplicate) throw new ApiError(`Ya tienes a ${duplicate.name} en tu lista.`, "conflict")
+      const p: Prospect = { id: uid("pr_"), ...fields, log: note ? [{ at, text: note, by: a.user.name }] : [], createdAt: at, updatedAt: at }
+      db.prospects.unshift(p)
+      return p
+    })
+  }
+
+  /** Adds a line to the contact history (a visit, a call, a message). */
+  async function addProspectNote(id: string, note: string): Promise<Prospect> {
+    const a = await asAdmin()
+    const t = text(note, 500)
+    if (!t) throw new ApiError("Escribe qué pasó.")
+    return store.write("global", (db) => {
+      const p = (db.prospects || []).find((x) => x.id === id)
+      if (!p) throw new ApiError("No encontramos ese prospecto.", "not_found")
+      p.log.unshift({ at: iso(), text: t, by: a.user.name })
+      p.updatedAt = iso()
+      return p
+    })
+  }
+
+  async function deleteProspect(id: string) {
+    await asAdmin()
+    await store.write("global", (db) => {
+      const before = (db.prospects || []).length
+      db.prospects = (db.prospects || []).filter((x) => x.id !== id)
+      if (db.prospects.length === before) throw new ApiError("No encontramos ese prospecto.", "not_found")
+    })
   }
 
   async function leads(): Promise<Lead[]> {
@@ -2215,6 +2313,10 @@ export function createService(store: Store, ctx: Context) {
     adminMetrics,
     adminAudit,
     leads,
+    prospects,
+    saveProspect,
+    addProspectNote,
+    deleteProspect,
     markLead,
     simulatePayment,
     // public
@@ -2257,7 +2359,7 @@ export const PUBLIC_METHODS = [
   "bundle", "customers", "customer", "adjustBalance", "exportCustomersCsv", "activity", "refundPurchase", "reviewQueue", "resolveReview",
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "simulatePayment",
+  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "prospects", "saveProspect", "addProspectNote", "deleteProspect", "simulatePayment",
   "billing", "startSubscription", "refreshBilling", "cancelSubscription",
   "registration", "privacyNotice", "signupBusiness", "saveCard", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
@@ -2268,5 +2370,5 @@ export type PublicMethod = (typeof PUBLIC_METHODS)[number]
 /** Calls that only read: the browser does not need to refresh other views after them. */
 export const READ_METHODS = new Set<string>([
   "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "campaigns", "campaignAudience", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "registration", "privacyNotice", "kiosk", "kioskScanStatus", "billing",
+  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "prospects", "registration", "privacyNotice", "kiosk", "kioskScanStatus", "billing",
 ])

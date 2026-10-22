@@ -3,7 +3,7 @@
 import type { Customer, DB, Program, Transaction } from "./types"
 import { DAY, customerToken } from "./util"
 
-export const DB_VERSION = 4
+export const DB_VERSION = 5
 
 export const TEST_ACCOUNTS = [
   { email: "admin@loyaloop.test", password: "loyaloop123", label: "Administrador LoyaLoop" },
@@ -198,6 +198,10 @@ export function createSeed(now = Date.now()): DB {
     ],
     leads: [
       { id: "l_1", name: "Mariana López", company: "Panadería del Centro", email: "mariana@panaderia.test", phone: "5533330001", branches: "2-5", preferredDate: iso(now + 3 * DAY).slice(0, 10), preferredTime: "Mañana · 9:00 a 12:00", notes: "Queremos sellos para el café de la mañana.", status: "new", createdAt: ago(1) },
+    ],
+    prospects: [
+      { id: "pr_1", name: "Estudio Núcleo Pilates", sector: "Pilates", zone: "Tlalpan Centro", address: "Calle de ejemplo 12", contactName: "Andrea", phone: "5544440001", email: "", instagram: "nucleo.pilates", link: "", stage: "visited", nextStep: "Regresar con la demo a las 5 pm", nextDate: iso(now).slice(0, 10), notes: "Usa una app de reservas; le interesan los avisos de clases.", log: [{ at: ago(2), text: "Primera visita: habló la recepcionista, la dueña viene martes y jueves.", by: "Miguel" }], createdAt: ago(2), updatedAt: ago(2) },
+      { id: "pr_2", name: "Barre Sur", sector: "Barre", zone: "Coapa", address: "", contactName: "", phone: "", email: "", instagram: "barresur", link: "", stage: "to_visit", nextStep: "", nextDate: "", notes: "", log: [], createdAt: ago(1), updatedAt: ago(1) },
     ],
     verifications: [],
     resets: [],

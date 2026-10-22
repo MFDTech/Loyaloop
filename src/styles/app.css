@@ -655,3 +655,20 @@ body { background: var(--ll-bg); color: var(--ll-ink); font-family: var(--font-b
 @media (min-width: 701px) and (max-width: 1000px) {
   .hero-visual { transform: scale(.82); transform-origin: left center; }
 }
+
+/* ---------- admin: prospects */
+.ll-maps-search { margin-bottom: 16px; }
+.ll-maps-search .ll-toolbar { align-items: flex-end; }
+.ll-maps-go { white-space: nowrap; }
+.ll-due { color: var(--ll-danger, #b3261e); font-weight: 600; }
+.ll-link-plain { background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.ll-prospect-actions { flex-wrap: wrap; gap: 8px; }
+.ll-chip-link { display: inline-flex; align-items: center; gap: 6px; font: 600 14px var(--font-body, Inter, sans-serif); color: var(--brand-terracotta, #8a2e12); background: var(--ll-surface-2, #f7efe2); border: 1px solid var(--ll-line, #ecdfc9); border-radius: 999px; padding: 6px 12px; cursor: pointer; text-decoration: none; }
+.ll-chip-link:hover { border-color: var(--brand-terracotta, #8a2e12); }
+.ll-grow { flex: 1; min-width: 0; }
+.ll-prospect-log { border-top: 1px solid var(--ll-line, #ecdfc9); padding-top: 16px; display: grid; gap: 12px; }
+.ll-prospect-log h3 { font-family: var(--font-heading); font-size: 17px; }
+.ll-prospect-log ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ll-prospect-log li { display: grid; gap: 2px; font-size: 15px; line-height: 1.45; padding-left: 12px; border-left: 2px solid var(--ll-line, #ecdfc9); }
+.ll-prospect-log li small { font-size: 14px; color: var(--ll-ink-2); }
+.ll-note-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }

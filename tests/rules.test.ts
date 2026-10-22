@@ -335,6 +335,41 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("prospects", () => {
+      it("keeps LoyaLoop's sales list with stages, notes and history, for the admin only", async () => {
+        await admin()
+        const before = (await api.prospects()).length
+        const p = await api.saveProspect({ name: "Barre Studio Sur", sector: "Barre", zone: "Coapa", phone: "55 1234 5678", instagram: "https://instagram.com/barresur.mx/", note: "Pasé; la dueña viene los martes." })
+        expect(p).toMatchObject({ stage: "to_visit", phone: "5512345678", instagram: "barresur.mx" })
+        expect(p.log.at(0)?.text).toMatch(/martes/)
+        await expect(api.saveProspect({ name: "barre studio sur", zone: "coapa" })).rejects.toThrow(/Ya tienes/)
+        await expect(api.saveProspect({ name: "Otro", phone: "123" })).rejects.toThrow(/10 dígitos/)
+        const moved = await api.saveProspect({ ...p, stage: "demo", nextStep: "Regresar con la demo", nextDate: "2026-10-20" })
+        expect(moved.log.at(0)?.text).toBe("Etapa: Por visitar → Demo hecha")
+        expect((await api.addProspectNote(p.id, "Le mandé el video por WhatsApp")).log).toHaveLength(3)
+        expect(await api.prospects()).toHaveLength(before + 1)
+        await as("dueno@affair.test")
+        await expect(api.prospects()).rejects.toThrow()
+        await admin()
+        await api.deleteProspect(p.id)
+        expect(await api.prospects()).toHaveLength(before)
+      })
+
+      it("closes the prospect when it becomes a business", async () => {
+        await admin()
+        const p = await api.saveProspect({ name: "Pilates Núcleo", sector: "Pilates", email: "dueña@nucleo.test" })
+        const { businessId: _b, ...program } = defaultProgram("x")
+        await api.createBusiness({
+          name: "Pilates Núcleo", sector: "Estudio de pilates o barre", contactName: "Ana", email: "contacto@nucleo.test", phone: "", status: "trial", plan: "starter",
+          branches: [{ name: "Centro", address: "" }], program: { ...program, type: "stamps", stampGoal: 10 }, rewards: [{ name: "Clase gratis", cost: 0, description: "" }], stampRewardIndex: 0,
+          brand: { color: "#1F6F5C" }, discreet: false, neutralName: "", locationAlerts: false, ownerName: "Ana", ownerEmail: "ana@nucleo.test", prospectId: p.id,
+        })
+        const after = (await api.prospects()).find((x) => x.id === p.id)!
+        expect(after.stage).toBe("trial")
+        expect(after.businessId).toBeTruthy()
+      })
+    })
+
     describe("businesses created by LoyaLoop", () => {
       it("creates a Starter business waiting for its payment", async () => {
         await admin()

@@ -254,4 +254,17 @@ drop index customers_phone;
 create unique index customers_phone on customers (business_id, (data->>'phone')) where coalesce(data->>'phone', '') <> '';
 `,
   },
+  {
+    id: "007_prospects",
+    sql: `
+-- LoyaLoop's own sales list: businesses to visit and follow up.
+create table prospects (
+  pk text primary key,
+  business_id text,
+  at text not null default '',
+  data jsonb not null
+);
+create index prospects_at on prospects (at);
+`,
+  },
 ]

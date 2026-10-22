@@ -49,6 +49,7 @@ export const TABLES: Record<Key, TableSpec> = {
   campaigns: spec("campaigns", "desc", { at: (r) => r.sendAt ?? r.createdAt ?? "" }),
   audit: spec("audit", "desc"),
   leads: spec("leads", "desc", { business: () => null }),
+  prospects: spec("prospects", "desc", { business: () => null, at: (r) => r.updatedAt ?? r.createdAt ?? "" }),
   verifications: spec("verifications", "asc", { pk: (r) => `${r.businessId}:${r.phone}`, at: (r) => r.sentAt }),
   resets: spec("resets", "asc", { pk: (r) => r.token, business: () => null, at: (r) => r.expiresAt }),
 }
@@ -79,7 +80,7 @@ async function loadScope(client: Client | Pool, scope: Scope, now: number): Prom
     else await Promise.all(jobs.map((job) => job()))
   }
   if (scope === "global") {
-    const all: Key[] = ["users", "businesses", "programs", "integrations", "leads", "resets"]
+    const all: Key[] = ["users", "businesses", "programs", "integrations", "leads", "prospects", "resets"]
     await run(all.map((key) => async () => set(key, await rows(client, key, "true", []))))
     return db
   }
