@@ -13,7 +13,7 @@ import type {
   Tier,
   Transaction,
 } from "./types"
-import { DEFAULT_MISS_YOU_DAYS, PROMOTION_VARS, noticeEnabled, noticeTemplate, renderNotice, type Audience, type AutomaticEvent, type NoticeEvent, type NoticeVar } from "./notices"
+import { DEFAULT_MISS_YOU_DAYS, PROMOTION_VARS, noticeEnabled, noticeTemplate, planHasNotices, renderNotice, type Audience, type AutomaticEvent, type NoticeEvent, type NoticeVar } from "./notices"
 import { DAY, MATCH_WINDOW_MS, int, normalizePhone, uid } from "./util"
 
 const iso = (now: number) => new Date(now).toISOString()
@@ -102,11 +102,14 @@ export function earnBlocked(db: DB, customer: Customer, now: number): string | n
 /** Records a notice for the customer's pass, with the business's own text. */
 function notice(db: DB, customer: Customer, event: AutomaticEvent, vars: Partial<Record<NoticeVar, string | number>>, now: number) {
   const program = programOf(db, customer.businessId)
-  if (!noticeEnabled(program, event)) return
+  if (!notifies(db, customer.businessId) || !noticeEnabled(program, event)) return
   const message = renderNotice(noticeTemplate(program, event), { ...baseVars(db, customer, program), ...vars })
   if (!message) return
   pushNotice(db, customer, event, message, now)
 }
+
+/** Starter businesses send no notices or promotions (Pro only). */
+const notifies = (db: DB, businessId: string) => planHasNotices(db.businesses.find((b) => b.id === businessId))
 
 function pushNotice(db: DB, customer: Customer, event: NoticeEvent, message: string, now: number, campaignId?: string) {
   db.notices.unshift({
@@ -570,6 +573,7 @@ const greetingHour = (now: number) => {
 /** Daily job: expirations, expiry warnings, birthday bonuses and tier review. */
 export function runMaintenance(db: DB, businessId: string, now: number) {
   const program = programOf(db, businessId)
+  const sends = notifies(db, businessId)
   expireScans(db, now)
   for (const customer of db.customers.filter((c) => c.businessId === businessId)) {
     const idle = now - time(customer.lastActivityAt)
@@ -598,7 +602,7 @@ export function runMaintenance(db: DB, businessId: string, now: number) {
       }
     }
     const year = localTime(now).year
-    if (customer.birthday && sameDay(customer.birthday, now) && customer.birthdayNoticeYear !== year && greetingHour(now) && noticeEnabled(program, "birthday")) {
+    if (customer.birthday && sameDay(customer.birthday, now) && customer.birthdayNoticeYear !== year && greetingHour(now) && sends && noticeEnabled(program, "birthday")) {
       customer.birthdayNoticeYear = year
       const gift = program.birthdayBonus > 0 ? (usesPoints(program) ? `${int(program.birthdayBonus)} puntos` : "un sello") : ""
       notice(db, customer, "birthday", { regalo: gift }, now)
@@ -609,6 +613,7 @@ export function runMaintenance(db: DB, businessId: string, now: number) {
       idle >= missYouDays * DAY &&
       (!customer.missYouAt || time(customer.missYouAt) < lastVisit) &&
       greetingHour(now) &&
+      sends &&
       noticeEnabled(program, "missYou")
     ) {
       customer.missYouAt = iso(now)
@@ -674,6 +679,11 @@ export function audienceOf(db: DB, businessId: string, audience: Audience, now: 
 
 /** Sends a promotion: one notice per customer, with their own name and balance. */
 export function sendCampaign(db: DB, campaign: Campaign, now: number): number {
+  if (!notifies(db, campaign.businessId)) {
+    // The business moved to Starter after scheduling it.
+    campaign.status = "canceled"
+    return 0
+  }
   const program = programOf(db, campaign.businessId)
   const allowed = new Set<string>(PROMOTION_VARS)
   const recipients = audienceOf(db, campaign.businessId, campaign.audience, now)

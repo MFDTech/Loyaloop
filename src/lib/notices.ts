@@ -136,6 +136,11 @@ export const DEFAULT_MISS_YOU_DAYS = 30
 
 export const eventInfo = (key: AutomaticEvent) => NOTICE_EVENTS.find((e) => e.key === key)!
 
+/** Automatic notices and promotions are a Pro feature; Starter cards only update their balance. */
+export const planHasNotices = (business?: { plan?: string } | null): boolean => business?.plan !== "starter"
+
+export const NOTICES_PRO_MESSAGE = "Los avisos y las promociones al celular están en el plan Pro. Escríbenos a hola@loyaloop.com.mx para cambiarte."
+
 export function noticeEnabled(program: Program, event: NoticeEvent): boolean {
   if (event === "promotion") return true
   const value = (program.notify as Partial<Record<AutomaticEvent, boolean>>)[event]

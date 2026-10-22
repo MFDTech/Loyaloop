@@ -10,6 +10,7 @@ import {
   PROMOTION_VARS,
   audienceLabel,
   noticeEnabled,
+  planHasNotices,
   renderNotice,
   sampleVars,
   type Audience,
@@ -81,11 +82,43 @@ function TemplateField({ id, value, placeholder, vars, onChange, onFocus }: { id
   )
 }
 
+/** Starter: avisos and promotions are a Pro feature. */
+function ProOnly({ bundle }: { bundle: api.Bundle }) {
+  const { business } = bundle
+  const sample = renderNotice("{nombre}, te extrañamos. Vuelve pronto a {negocio}.", sampleVars(business.name))
+  const subject = encodeURIComponent("Quiero cambiarme al plan Pro")
+  return (
+    <>
+      <PageHeader title="Avisos" description="Mensajes que tus clientes reciben en la pantalla de bloqueo a través de su tarjeta en la Wallet." />
+      <Card title="Disponible en el plan Pro" description="En Starter la tarjeta de tus clientes se actualiza sola con cada sello, pero no les manda mensajes.">
+        <div className="ll-split">
+          <div className="ll-stack">
+            <p>Con Pro ($990 al mes) tus clientes reciben en su celular:</p>
+            <ul className="ll-bullets">
+              <li>Avisos automáticos: sello ganado, te falta un sello, recompensa lista, cumpleaños y «te extrañamos» cuando dejan de venir.</li>
+              <li>Promociones que tú escribes, al momento o programadas, solo a quien aceptó recibirlas.</li>
+              <li>Tus propios textos, con el nombre de cada cliente.</li>
+            </ul>
+            <div className="ll-row">
+              <a className="button ll-btn ll-btn-primary ll-btn-md" href={`mailto:hola@loyaloop.com.mx?subject=${subject}`}>
+                <Icon name="mail" size={16} /> Quiero cambiarme a Pro
+              </a>
+            </div>
+            <p className="ll-hint">hola@loyaloop.com.mx</p>
+          </div>
+          <LockPreview name={business.discreet ? business.neutralName : business.name} color={business.brand.color} logo={business.brand.logo} message={sample} />
+        </div>
+      </Card>
+    </>
+  )
+}
+
 export default function Notifications() {
   const b = useAsync(api.bundle)
   const log = useAsync(api.notices)
   if (b.error) return <ErrorState message={b.error} retry={b.reload} />
   if (!b.data) return <Loading rows={5} />
+  if (!planHasNotices(b.data.business)) return <ProOnly bundle={b.data} />
   return (
     <>
       <PageHeader title="Avisos" description="Mensajes que tus clientes reciben en la pantalla de bloqueo a través de su tarjeta en la Wallet." />

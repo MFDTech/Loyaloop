@@ -117,7 +117,6 @@ const STARTER_FEATURES = [
   "Apple Wallet y Google Wallet",
   "Registro con QR o etiqueta NFC",
   "Un sello por visita escaneando en la caja",
-  "Avisos y promociones al celular",
   "Modo discreto",
   "1 sucursal",
 ]
@@ -126,6 +125,7 @@ const PRO_FEATURES = [
   "Todo lo de Starter",
   "Puntos automáticos desde tu terminal (Mercado Pago, Clip)",
   "Sellos, puntos, recompensas y niveles",
+  "Avisos y promociones al celular",
   "Protección contra abusos en caja",
   "Etiqueta NFC y escáner para cada caja",
   "Te ayudamos a configurarla",
@@ -138,7 +138,7 @@ const FAQ: [string, string][] = [
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
   ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
   ["¿Cómo empiezo con Starter?", "Agenda una llamada: te mostramos cómo funciona, creamos tu cuenta y tú pones tu logo, colores y recompensa. Imprimes el QR para tu mostrador y activamos tu tarjeta en cuanto recibamos tu pago. Sin plazo forzoso."],
-  ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita. En Pro conectamos tu terminal de cobro y los puntos se suman solos según lo que pagan, sin que el cajero haga nada."],
+  ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita; su tarjeta se actualiza sola, pero no recibe avisos ni promociones. En Pro conectamos tu terminal de cobro, los puntos se suman solos según lo que pagan y tus clientes reciben avisos y promociones en su celular."],
 ]
 
 export default function Landing() {

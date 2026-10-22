@@ -2,6 +2,7 @@ import { useState } from "react"
 import * as api from "../../lib/api"
 import { cardFromBundle } from "../../lib/card"
 import { useAction, useAsync } from "../../lib/hooks"
+import { planHasNotices } from "../../lib/notices"
 import { href } from "../../lib/router"
 import { birthdayLabel, date, dateTime, formatPhone, int, kindLabel, money, relative } from "../../lib/util"
 import { PassPreview } from "../../components/Pass"
@@ -22,6 +23,7 @@ export default function CustomerDetail({ id, me }: { id: string; me: api.Me }) {
   if (detail.error) return <>{back}<ErrorState message={detail.error} retry={detail.reload} /></>
   if (!detail.data || !bundle.data) return <Loading rows={6} />
   const { customer, notices, spending12m, nextTier } = detail.data
+  const pro = planHasNotices(bundle.data.business)
   const program = bundle.data.program
   const stamps = program.type === "stamps"
   const rows = (activity.data || []).filter((t) => t.customerId === id)
@@ -44,7 +46,7 @@ export default function CustomerDetail({ id, me }: { id: string; me: api.Me }) {
           <span className="ll-row" style={{ gap: 8 }}>
             {customer.tierName && <Badge tone="brand">Nivel {customer.tierName}</Badge>}
             {customer.employee && <Badge tone="warning">Teléfono de empleado</Badge>}
-            <Badge tone={customer.promotionsOptIn ? "success" : "neutral"}>{customer.promotionsOptIn ? "Acepta promociones" : "Sin promociones"}</Badge>
+            {pro && <Badge tone={customer.promotionsOptIn ? "success" : "neutral"}>{customer.promotionsOptIn ? "Acepta promociones" : "Sin promociones"}</Badge>}
             <span className="ll-muted">Cliente desde {date(customer.createdAt)}</span>
           </span>
         }
@@ -62,9 +64,9 @@ export default function CustomerDetail({ id, me }: { id: string; me: api.Me }) {
         <Stat label="Gasto en 12 meses" icon="wallet" value={money(spending12m)} detail="Sin propinas ni devoluciones" />
         {program.type === "tiers" ? (
           <Stat label="Siguiente nivel" icon="layers" value={nextTier ? nextTier.name : "Nivel máximo"} detail={nextTier ? `Le faltan ${money(nextTier.missing)}` : "Ya está en el nivel más alto"} />
-        ) : (
+        ) : pro ? (
           <Stat label="Avisos enviados" icon="bell" value={int(notices.length)} detail="Notificaciones del pase" />
-        )}
+        ) : null}
       </div>
       <div className="ll-split">
         <Card title="Historial" description="Cada movimiento con su sucursal, caja y dispositivo." padded={false}>
@@ -151,23 +153,25 @@ export default function CustomerDetail({ id, me }: { id: string; me: api.Me }) {
               </div>
             </dl>
           </Card>
-          <Card title="Avisos en su Wallet" description="Lo que su teléfono le mostró en la pantalla de bloqueo.">
-            {notices.length ? (
-              <div className="ll-list">
-                {notices.slice(0, 8).map((n) => (
-                  <div key={n.id} className="ll-list-item">
-                    <Icon name="bell" size={18} />
-                    <div>
-                      <strong>{n.message}</strong>
-                      <small>{relative(n.createdAt)}</small>
+          {(pro || notices.length > 0) && (
+            <Card title="Avisos en su Wallet" description="Lo que su teléfono le mostró en la pantalla de bloqueo.">
+              {notices.length ? (
+                <div className="ll-list">
+                  {notices.slice(0, 8).map((n) => (
+                    <div key={n.id} className="ll-list-item">
+                      <Icon name="bell" size={18} />
+                      <div>
+                        <strong>{n.message}</strong>
+                        <small>{relative(n.createdAt)}</small>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="ll-hint">Todavía no ha recibido avisos.</p>
-            )}
-          </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="ll-hint">Todavía no ha recibido avisos.</p>
+              )}
+            </Card>
+          )}
         </div>
       </div>
       {adjusting && <AdjustModal customer={customer} stamps={stamps} onClose={() => setAdjusting(false)} />}

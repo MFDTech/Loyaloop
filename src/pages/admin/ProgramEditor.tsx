@@ -71,7 +71,7 @@ export function ProgramEditor({ value, onChange, rewards, starter = false }: { v
   const setTier = (index: number, patch: Partial<Tier>) => set("tiers", value.tiers.map((t, i) => (i === index ? { ...t, ...patch } : t)))
   return (
     <div className="ll-stack">
-      {starter && <Notice tone="info">En el plan Starter la tarjeta es de sellos: un sello por visita. Puntos, niveles y conexión con tu terminal están en Pro.</Notice>}
+      {starter && <Notice tone="info">En el plan Starter la tarjeta es de sellos: un sello por visita. Puntos, niveles, conexión con tu terminal, avisos y promociones están en Pro.</Notice>}
       {!starter && (
       <fieldset className="ll-fieldset">
         <legend>Tipo de tarjeta</legend>
@@ -150,13 +150,15 @@ export function ProgramEditor({ value, onChange, rewards, starter = false }: { v
         <NumberField label="Alerta de tarjeta sospechosa" value={value.suspiciousFactor} onChange={(n) => set("suspiciousFactor", n)} hint="Avisa cuando una tarjeta compra más de estas veces el promedio en 30 días. 0 = apagada." />
       </fieldset>
 
-      <fieldset className="ll-fieldset">
-        <legend>Avisos automáticos en la Wallet</legend>
-        {NOTICE_EVENTS.filter((e) => e.applies(value.type)).map((e) => (
-          <Check key={e.key} label={e.title} hint={e.when} checked={value.notify[e.key] ?? e.defaultOn} onChange={(v) => set("notify", { ...value.notify, [e.key]: v })} />
-        ))}
-        <p className="ll-field-hint">{starter ? "Sus textos se cambian en «Avisos»." : "El dueño también los enciende y cambia sus textos en «Avisos» de su panel."}</p>
-      </fieldset>
+      {!starter && (
+        <fieldset className="ll-fieldset">
+          <legend>Avisos automáticos en la Wallet</legend>
+          {NOTICE_EVENTS.filter((e) => e.applies(value.type)).map((e) => (
+            <Check key={e.key} label={e.title} hint={e.when} checked={value.notify[e.key] ?? e.defaultOn} onChange={(v) => set("notify", { ...value.notify, [e.key]: v })} />
+          ))}
+          <p className="ll-field-hint">El dueño también los enciende y cambia sus textos en «Avisos» de su panel.</p>
+        </fieldset>
+      )}
     </div>
   )
 }
@@ -275,6 +277,7 @@ export function draftCard(name: string, program: ProgramDraft, brand: BrandDraft
     askPhone: brand.askPhone,
     demo: false,
     discreet: brand.discreet,
+    promotions: !brand.discreet,
     brand: brand.brand,
     type: program.type,
     program: {

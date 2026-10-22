@@ -152,7 +152,7 @@ function DataTab({ data }: { data: AdminBundle }) {
           <div className="ll-stack">
             <p className="ll-hint">
               {business.plan === "starter"
-                ? "Starter: una sucursal, tarjeta de sellos que el dueño edita solo."
+                ? "Starter: una sucursal, tarjeta de sellos que el dueño edita solo, sin avisos ni promociones."
                 : "Pro: terminal conectada, todos los tipos de tarjeta y sucursales adicionales ($250 cada una)."}{" "}
               Cobra <b>{money(monthlyAmount(business, data.branches.length))} al mes</b>
               {business.monthlyPrice ? " (precio acordado)" : ""}.

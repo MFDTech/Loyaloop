@@ -83,7 +83,7 @@ export default function PlanPage({ returning }: { returning: boolean }) {
                 {p.custom
                   ? "Precio acordado con LoyaLoop."
                   : p.plan === "starter"
-                    ? "Tarjeta de sellos, 1 sucursal y clientes ilimitados."
+                    ? "Tarjeta de sellos, 1 sucursal y clientes ilimitados. Los avisos y las promociones al celular están en Pro."
                     : `Puntos automáticos desde tu terminal, ${p.branches === 1 ? "1 sucursal" : `${p.branches} sucursales (cada adicional $250)`} y clientes ilimitados.`}
               </p>
             </div>

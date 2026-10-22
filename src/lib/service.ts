@@ -5,7 +5,7 @@
 // The pages never call this directly; they go through src/lib/api.ts.
 
 import * as engine from "./engine"
-import { DEFAULT_MISS_YOU_DAYS, MAX_NOTICE, MAX_PROMOTIONS_PER_DAY, NOTICE_EVENTS, PROMOTION_VARS, unknownVars, type Audience } from "./notices"
+import { DEFAULT_MISS_YOU_DAYS, MAX_NOTICE, MAX_PROMOTIONS_PER_DAY, NOTICE_EVENTS, NOTICES_PRO_MESSAGE, PROMOTION_VARS, planHasNotices, unknownVars, type Audience } from "./notices"
 import { DEMO_BUSINESS_ID, DEMO_CODE, DEMO_RETENTION_DAYS, defaultProgram, demoBusiness } from "./seed"
 import type {
   Campaign,
@@ -302,6 +302,8 @@ export interface GlobalMetrics {
 export interface PublicCard {
   businessName: string
   discreet: boolean
+  /** Registration offers the promotions checkbox (Pro, not discreet). */
+  promotions: boolean
   brand: Business["brand"]
   type: CardType
   program: Pick<Program, "pointsPerPeso" | "minPurchase" | "stampGoal" | "stampMinPurchase" | "expirationMonths" | "tiers" | "welcomeBonus" | "birthdayBonus">
@@ -995,8 +997,14 @@ export function createService(store: Store, ctx: Context) {
 
   // ---------------------------------------------------------------- notices and promotions
 
+  /** Avisos and promotions are Pro only. */
+  async function requireNotices(businessId: string) {
+    if (!planHasNotices(await store.business(businessId))) throw new ApiError(NOTICES_PRO_MESSAGE, "plan_limit")
+  }
+
   async function saveNotices(input: { notify: Program["notify"]; messages: Program["messages"]; missYouDays?: number }) {
     const a = await inBusiness(["owner", "manager"])
+    await requireNotices(a.businessId)
     const notify: Program["notify"] = {}
     const messages: NonNullable<Program["messages"]> = {}
     for (const e of NOTICE_EVENTS) {
@@ -1053,6 +1061,7 @@ export function createService(store: Store, ctx: Context) {
 
   async function createCampaign(input: { message: string; audience: Audience; sendAt?: string }): Promise<Campaign> {
     const a = await inBusiness(["owner", "manager"])
+    await requireNotices(a.businessId)
     const message = text(input.message, 400)
     if (!message) throw new ApiError("Escribe el mensaje.")
     if (message.length > MAX_NOTICE) throw new ApiError(`El mensaje es muy largo: máximo ${MAX_NOTICE} caracteres.`)
@@ -1520,6 +1529,7 @@ export function createService(store: Store, ctx: Context) {
     return {
       businessName: business.discreet ? business.neutralName : business.name,
       discreet: business.discreet,
+      promotions: !business.discreet && planHasNotices(business),
       brand: business.brand,
       type: program.type,
       program: { pointsPerPeso: program.pointsPerPeso, minPurchase: program.minPurchase, stampGoal: program.stampGoal, stampMinPurchase: program.stampMinPurchase, expirationMonths: program.expirationMonths, tiers: program.tiers, welcomeBonus: program.welcomeBonus, birthdayBonus: program.birthdayBonus },
@@ -1873,7 +1883,7 @@ export function createService(store: Store, ctx: Context) {
       address: business.legalAddress || branch.address,
       email: business.privacyEmail || business.email,
       askPhone: !!business.askPhone,
-      promotions: !business.discreet,
+      promotions: !business.discreet && planHasNotices(business),
     }
   }
 
@@ -1963,7 +1973,7 @@ export function createService(store: Store, ctx: Context) {
           stamps: 0,
           earnedRewards: [],
           branchId: branch.id,
-          promotionsOptIn: !!input.promotions,
+          promotionsOptIn: !!input.promotions && planHasNotices(business),
           privacyAcceptedAt: at,
           createdAt: at,
           lastActivityAt: at,
@@ -2033,7 +2043,7 @@ export function createService(store: Store, ctx: Context) {
         stamps: 0,
         earnedRewards: [],
         branchId: branch.id,
-        promotionsOptIn: !!input.promotions,
+        promotionsOptIn: !!input.promotions && planHasNotices(business),
         privacyAcceptedAt: at,
         createdAt: at,
         lastActivityAt: at,

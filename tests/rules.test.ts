@@ -614,6 +614,33 @@ for (const [label, make] of backends) {
         expect((await api.notices()).filter((n) => n.event === "missYou")).toHaveLength(first.length)
       })
 
+      it("keeps avisos and promotions in Pro: a Starter card only updates its balance", async () => {
+        await as("dueno@laesquina.test")
+        const scheduled = await api.createCampaign({ message: "Promo del sábado", audience: { kind: "all" }, sendAt: new Date("2026-10-17T10:00:00-06:00").toISOString() })
+        expect((await api.registration("ESQR4M")).card.promotions).toBe(true)
+        await admin()
+        await api.adminUpdateBusiness("b_esquina", { plan: "starter" })
+        expect((await api.registration("ESQR4M")).card.promotions).toBe(false)
+        await esquinaScanner()
+        const before = (await api.notices()).length
+        const c = (await api.customers()).find((x) => x.stamps < 6)!
+        await api.kioskScan(c.token)
+        expect((await api.customer(c.id)).customer.stamps).toBe(c.stamps + 1)
+        expect((await api.notices()).length).toBe(before)
+        await expect(api.saveNotices({ notify: {}, messages: {} })).rejects.toThrow(/plan Pro/)
+        await expect(api.createCampaign({ message: "Hoy 2x1", audience: { kind: "all" } })).rejects.toThrow(/plan Pro/)
+        // A promotion scheduled while in Pro is not sent after moving to Starter.
+        at("2026-10-17T10:30:00")
+        await api.tick()
+        expect((await api.campaigns()).find((x) => x.id === scheduled.id)!.status).toBe("canceled")
+        expect((await api.notices()).some((n) => n.event === "promotion")).toBe(false)
+        // Even if a request asks for promotions, a Starter customer is not opted in.
+        const sent = await api.sendCode("ESQR4M", "5598765432", "new")
+        await api.completeRegistration("ESQR4M", { name: "Sol Ruiz", phone: "5598765432", email: "", birthday: "", promotions: true, privacy: true }, sent.previewCode)
+        await as("dueno@laesquina.test")
+        expect((await api.customers()).find((x) => x.name === "Sol Ruiz")!.promotionsOptIn).toBe(false)
+      })
+
       it("sends promotions only to customers who accepted them, personalized, two per day at most", async () => {
         await as("dueno@affair.test")
         const customers = await api.customers()
