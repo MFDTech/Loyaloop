@@ -1,14 +1,69 @@
+import { useState } from "react"
 import * as api from "../../lib/api"
+import { useAction } from "../../lib/hooks"
+import { href } from "../../lib/router"
+import { BrandEditor, ProgramEditor, draftCard, type BrandDraft, type ProgramDraft } from "../admin/ProgramEditor"
 import { cardFromBundle } from "../../lib/card"
 import { useAsync } from "../../lib/hooks"
 import { sampleHolder, PassPreview } from "../../components/Pass"
 import { cardTypeHelp, cardTypeLabel, int, money } from "../../lib/util"
-import { Badge, Card, ErrorState, Loading, Notice, PageHeader } from "../../components/ui"
+import { Badge, Button, Card, ErrorState, Loading, Notice, PageHeader, useToast } from "../../components/ui"
+
+/** Starter plan: the owner designs the card and its rules. */
+function StarterEditor({ bundle }: { bundle: api.Bundle }) {
+  const { businessId: _b, ...initialProgram } = bundle.program
+  const [program, setProgram] = useState<ProgramDraft>({ ...initialProgram, type: "stamps" })
+  const [brand, setBrand] = useState<BrandDraft>({ brand: bundle.business.brand, discreet: bundle.business.discreet, neutralName: bundle.business.neutralName, locationAlerts: false, askPhone: false })
+  const save = useAction(api.saveCard)
+  const toast = useToast()
+  const rewards = bundle.rewards.filter((r) => r.active)
+  const card = draftCard(bundle.business.name, program, brand, rewards)
+  return (
+    <>
+      <PageHeader title="Tu tarjeta" description="Ponle tu logo y tus colores, y decide cuántos sellos se necesitan para la recompensa." />
+      <div className="ll-split">
+        <div className="ll-stack">
+          <Card title="Diseño">
+            <BrandEditor value={brand} onChange={setBrand} name={bundle.business.name} stamps starter />
+          </Card>
+          <Card title="Reglas">
+            <ProgramEditor value={program} onChange={setProgram} rewards={rewards} starter />
+            <p className="ll-hint" style={{ marginTop: 12 }}>
+              Para cambiar el nombre de la recompensa entra a{" "}
+              <a className="ll-link" href={href("/panel/recompensas")}>
+                Recompensas
+              </a>
+              .
+            </p>
+          </Card>
+          {save.error && <Notice tone="error">{save.error}</Notice>}
+          <div className="ll-form-actions">
+            <Button
+              loading={save.pending}
+              onClick={async () => {
+                const r = await save.run({ program, brand: { brand: brand.brand, discreet: brand.discreet, neutralName: brand.neutralName } })
+                if (r.ok) toast("Tarjeta guardada. Los pases de tus clientes se actualizan solos.")
+              }}
+            >
+              Guardar tarjeta
+            </Button>
+          </div>
+        </div>
+        <div className="ll-sticky">
+          <Card title="Así se ve en la Wallet">
+            <PassPreview card={card} holder={sampleHolder(card)} />
+          </Card>
+        </div>
+      </div>
+    </>
+  )
+}
 
 export default function CardView() {
   const b = useAsync(api.bundle)
   if (b.error) return <ErrorState message={b.error} retry={b.reload} />
   if (!b.data) return <Loading rows={6} />
+  if (b.data.business.plan === "starter") return <StarterEditor bundle={b.data} />
   const { program, business, rewards } = b.data
   const card = cardFromBundle(b.data)
   const points = program.type !== "stamps"
@@ -35,7 +90,7 @@ export default function CardView() {
   return (
     <>
       <PageHeader title="Tarjeta y reglas" description="Así funciona tu programa y así lo ven tus clientes en su Wallet." />
-      <Notice tone="info">Por ahora las reglas las configura LoyaLoop por ti. Si quieres cambiar algo, escríbenos a hola@loyaloop.mx.</Notice>
+      <Notice tone="info">Por ahora las reglas las configura LoyaLoop por ti. Si quieres cambiar algo, escríbenos a hola@loyaloop.com.mx.</Notice>
       <div className="ll-split">
         <div className="ll-stack">
           <Card title="Reglas de tu programa">

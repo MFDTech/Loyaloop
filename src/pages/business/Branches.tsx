@@ -247,21 +247,31 @@ export function PairingModal({ register, onClose }: { register: Register; onClos
     const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
   }, [code])
-  const link = absoluteLink("/caja")
+  // The link carries the code: each register gets its own, and it only works once.
+  const link = code ? absoluteLink(`/caja/${code.code}`) : ""
   return (
     <Modal title={`Vincular escáner a ${register.name}`} onClose={onClose} footer={<Button onClick={onClose}>Listo</Button>}>
       <div className="ll-stack">
-        <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: 1.5 }}>
-          <li>En la tablet o computadora de la caja, abre esta dirección:</li>
-        </ol>
-        <div className="ll-code-box">
-          <code>{link}</code>
-          <CopyButton text={link} />
-        </div>
-        <ol start={2} style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: 1.5 }}>
-          <li>Escribe este código. Solo se usa una vez.</li>
-        </ol>
-        {pending && !code ? <Loading rows={1} /> : code ? <div className="ll-big-code" aria-live="polite">{code.code}</div> : null}
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>
+          En la tablet o computadora de <b>{register.name}</b>, escanea este código con la cámara o abre el enlace. Si ese dispositivo era el escáner de otra caja, queda cambiado a esta.
+        </p>
+        {pending && !code ? (
+          <Loading rows={2} />
+        ) : code ? (
+          <>
+            <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
+              <Qr value={link} size={168} label={`Enlace para vincular ${register.name}`} />
+            </div>
+            <div className="ll-code-box">
+              <code>{link}</code>
+              <CopyButton text={link} />
+            </div>
+            <p className="ll-hint" style={{ textAlign: "center", margin: 0 }}>
+              O abre {absoluteLink("/caja")} y escribe el código
+            </p>
+            <div className="ll-big-code" aria-live="polite">{code.code}</div>
+          </>
+        ) : null}
         {code && (
           <p className="ll-hint" style={{ textAlign: "center" }}>
             {left > 0 ? `Vence en ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "El código venció."}{" "}
@@ -297,6 +307,9 @@ function TagModal({ branch, onClose }: { branch: Branch; onClose: () => void }) 
             Imprime también este QR junto a la etiqueta, para los celulares sin NFC.
           </p>
         </div>
+        <a className="ll-link" href={`#/letrero/${branch.code}`} target="_blank" rel="noreferrer">
+          Imprimir letrero con QR para el mostrador
+        </a>
         <a className="ll-link" href={`#/r/${branch.code}`} target="_blank" rel="noreferrer">
           Abrir el registro de esta sucursal
         </a>

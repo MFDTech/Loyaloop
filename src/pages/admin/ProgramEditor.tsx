@@ -1,8 +1,10 @@
+import { NOTICE_EVENTS } from "../../lib/notices"
+import { STAMP_ICON_OPTIONS } from "../../lib/stampIcons"
 import { useEffect, useState, type ChangeEvent } from "react"
 import type { PublicCard } from "../../lib/api"
 import type { Brand, CardType, Program, Tier } from "../../lib/types"
 import { cardTypeHelp, cardTypeLabel, inkFor, uid } from "../../lib/util"
-import { Button, Check, Field, Icon, IconButton, Notice, SelectField } from "../../components/ui"
+import { Button, Check, Field, Icon, IconButton, Notice, Segmented, SelectField } from "../../components/ui"
 
 export type ProgramDraft = Omit<Program, "businessId">
 
@@ -63,12 +65,14 @@ export function NumberField({ label, value, onChange, hint, min = 0, step, suffi
 
 const TYPES: CardType[] = ["points", "stamps", "rewards", "tiers"]
 
-export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraft; onChange: (next: ProgramDraft) => void; rewards: { id: string; name: string }[] | null }) {
+export function ProgramEditor({ value, onChange, rewards, starter = false }: { value: ProgramDraft; onChange: (next: ProgramDraft) => void; rewards: { id: string; name: string }[] | null; starter?: boolean }) {
   const set = <K extends keyof ProgramDraft>(key: K, v: ProgramDraft[K]) => onChange({ ...value, [key]: v })
   const points = value.type !== "stamps"
   const setTier = (index: number, patch: Partial<Tier>) => set("tiers", value.tiers.map((t, i) => (i === index ? { ...t, ...patch } : t)))
   return (
     <div className="ll-stack">
+      {starter && <Notice tone="info">En el plan Starter la tarjeta es de sellos: un sello por visita. Puntos, niveles, conexión con tu terminal, avisos y promociones están en Pro.</Notice>}
+      {!starter && (
       <fieldset className="ll-fieldset">
         <legend>Tipo de tarjeta</legend>
         <div className="ll-type-grid">
@@ -86,6 +90,7 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
           ))}
         </div>
       </fieldset>
+      )}
 
       {points ? (
         <div className="ll-grid-3">
@@ -96,7 +101,7 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
       ) : (
         <div className="ll-grid-3">
           <NumberField label="Sellos para completar" value={value.stampGoal} min={2} onChange={(n) => set("stampGoal", Math.round(n))} />
-          <NumberField label="Compra mínima" value={value.stampMinPurchase} onChange={(n) => set("stampMinPurchase", n)} hint="En pesos, por sello. 0 = cualquier monto." />
+          {!starter && <NumberField label="Compra mínima" value={value.stampMinPurchase} onChange={(n) => set("stampMinPurchase", n)} hint="En pesos, por sello. 0 = cualquier monto." />}
           {rewards ? (
             <SelectField label="Recompensa al completar" value={value.stampRewardId || ""} onChange={(e) => set("stampRewardId", e.target.value || undefined)} hint={rewards.length ? undefined : "Primero crea una recompensa."}>
               <option value="">Elige una recompensa</option>
@@ -145,13 +150,15 @@ export function ProgramEditor({ value, onChange, rewards }: { value: ProgramDraf
         <NumberField label="Alerta de tarjeta sospechosa" value={value.suspiciousFactor} onChange={(n) => set("suspiciousFactor", n)} hint="Avisa cuando una tarjeta compra más de estas veces el promedio en 30 días. 0 = apagada." />
       </fieldset>
 
-      <fieldset className="ll-fieldset">
-        <legend>Avisos automáticos en la Wallet</legend>
-        <Check label={points ? "Puntos ganados" : "Sello ganado"} checked={value.notify.pointsEarned} onChange={(v) => set("notify", { ...value.notify, pointsEarned: v })} />
-        <Check label="Recompensa disponible" checked={value.notify.rewardAvailable} onChange={(v) => set("notify", { ...value.notify, rewardAvailable: v })} />
-        {value.type === "tiers" && <Check label="Cambio de nivel" checked={value.notify.tierChange} onChange={(v) => set("notify", { ...value.notify, tierChange: v })} />}
-        {points && <Check label="Puntos por vencer (30 días antes)" checked={value.notify.pointsExpiring} onChange={(v) => set("notify", { ...value.notify, pointsExpiring: v })} />}
-      </fieldset>
+      {!starter && (
+        <fieldset className="ll-fieldset">
+          <legend>Avisos automáticos en la Wallet</legend>
+          {NOTICE_EVENTS.filter((e) => e.applies(value.type)).map((e) => (
+            <Check key={e.key} label={e.title} hint={e.when} checked={value.notify[e.key] ?? e.defaultOn} onChange={(v) => set("notify", { ...value.notify, [e.key]: v })} />
+          ))}
+          <p className="ll-field-hint">El dueño también los enciende y cambia sus textos en «Avisos» de su panel.</p>
+        </fieldset>
+      )}
     </div>
   )
 }
@@ -161,6 +168,7 @@ export interface BrandDraft {
   discreet: boolean
   neutralName: string
   locationAlerts: boolean
+  askPhone: boolean
 }
 
 const MAX_IMAGE = 400 * 1024
@@ -177,7 +185,7 @@ function readImage(e: ChangeEvent<HTMLInputElement>, done: (dataUrl: string) => 
   reader.readAsDataURL(file)
 }
 
-export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string }) {
+export function BrandEditor({ value, onChange, name, stamps = false, starter = false }: { value: BrandDraft; onChange: (next: BrandDraft) => void; name: string; stamps?: boolean; starter?: boolean }) {
   const [error, setError] = useState("")
   const setBrand = (patch: Partial<Brand>) => onChange({ ...value, brand: { ...value.brand, ...patch } })
   const contrast = inkFor(value.brand.color).contrast
@@ -230,6 +238,17 @@ export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onCh
         </div>
         <p className="ll-field-hint">Opcional. Proporción 3:1 (por ejemplo 1125 × 369 px). En tarjetas de sellos se dibujan los sellos encima.</p>
       </div>
+      {stamps && (
+        <div className="ll-field">
+          <span className="ll-label">Ícono de los sellos</span>
+          <Segmented label="Ícono de los sellos" value={value.brand.stampIcon || "check"} options={STAMP_ICON_OPTIONS} onChange={(stampIcon) => setBrand({ stampIcon })} />
+          <p className="ll-field-hint">
+            {value.brand.stampIcon === "logo" && (!value.brand.logo || value.discreet)
+              ? "Sin logo (o en modo discreto) los sellos llevan una palomita."
+              : "Se dibuja dentro de cada sello ganado. El último sello muestra un regalo."}
+          </p>
+        </div>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <Check
         label="Modo discreto"
@@ -238,7 +257,15 @@ export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onCh
         onChange={(discreet) => onChange({ ...value, discreet, locationAlerts: discreet ? false : value.locationAlerts })}
       />
       {value.discreet && <Field label="Nombre neutro" value={value.neutralName} maxLength={40} onChange={(e) => onChange({ ...value, neutralName: e.target.value })} hint="Así se verá en la Wallet del cliente." />}
-      <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />
+      {!starter && (
+      <Check
+        label="Pedir celular al registrarse"
+        hint="Apagado: el cliente solo escribe su nombre (o un apodo) y su tarjeta sale al instante; el bono de bienvenida llega en su primera compra o visita. Encendido: confirma su celular con un código."
+        checked={value.askPhone}
+        onChange={(askPhone) => onChange({ ...value, askPhone })}
+      />
+      )}
+      {!starter && <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />}
     </div>
   )
 }
@@ -247,7 +274,10 @@ export function BrandEditor({ value, onChange, name }: { value: BrandDraft; onCh
 export function draftCard(name: string, program: ProgramDraft, brand: BrandDraft, rewards: { id?: string; name: string; cost: number; description: string }[]): PublicCard {
   return {
     businessName: brand.discreet ? brand.neutralName || "Mi tarjeta de beneficios" : name || "Tu negocio",
+    askPhone: brand.askPhone,
+    demo: false,
     discreet: brand.discreet,
+    promotions: !brand.discreet,
     brand: brand.brand,
     type: program.type,
     program: {

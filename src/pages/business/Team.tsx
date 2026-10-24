@@ -133,6 +133,7 @@ function InviteModal({ branches, onClose }: { branches: { id: string; name: stri
   const [excluded, setExcluded] = useState(true)
   const [branchId, setBranchId] = useState("")
   const [link, setLink] = useState("")
+  const [emailed, setEmailed] = useState(true)
   const { run, pending, error } = useAction(api.inviteMember)
   return (
     <Modal
@@ -155,7 +156,7 @@ function InviteModal({ branches, onClose }: { branches: { id: string; name: stri
       }
     >
       {link ? (
-        <InviteLinkNotice link={link} email={email} />
+        <InviteLinkNotice link={link} email={email} emailed={emailed} />
       ) : (
         <form
           id="invite-form"
@@ -163,7 +164,10 @@ function InviteModal({ branches, onClose }: { branches: { id: string; name: stri
           onSubmit={async (e) => {
             e.preventDefault()
             const r = await run({ name, email, role, phone, excluded, branchId })
-            if (r.ok) setLink(r.value.link)
+            if (r.ok) {
+              setLink(r.value.link)
+              setEmailed(r.value.emailed)
+            }
           }}
         >
           <Field label="Nombre" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />

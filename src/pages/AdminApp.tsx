@@ -8,6 +8,7 @@ import Businesses, { AdminHome } from "./admin/Businesses"
 import NewBusiness from "./admin/NewBusiness"
 import BusinessDetail from "./admin/BusinessDetail"
 import { AdminAccount, Audit, Leads } from "./admin/Other"
+import Prospects from "./admin/Prospects"
 import NotFound from "./NotFound"
 
 export default function AdminApp({ route }: { route: Route }) {
@@ -16,6 +17,13 @@ export default function AdminApp({ route }: { route: Route }) {
     const me = await api.me()
     if (me?.user.role !== "admin" || me.impersonating) return 0
     return (await api.leads()).filter((l) => l.status === "new").length
+  })
+  const followUps = useAsync(async () => {
+    const me = await api.me()
+    if (me?.user.role !== "admin" || me.impersonating) return 0
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    return (await api.prospects()).filter((p) => p.stage !== "won" && p.nextDate && p.nextDate <= today).length
   })
   const me = session.data
   const section = route.parts[1] || ""
@@ -34,6 +42,7 @@ export default function AdminApp({ route }: { route: Route }) {
   const nav: NavItem[] = [
     { path: "/admin", label: "Inicio", icon: "grid" },
     { path: "/admin/negocios", label: "Negocios", icon: "store" },
+    { path: "/admin/prospectos", label: "Prospectos", icon: "search", badge: followUps.data || 0 },
     { path: "/admin/solicitudes", label: "Solicitudes", icon: "mail", badge: leads.data || 0 },
     { path: "/admin/bitacora", label: "Bitácora", icon: "layers" },
     { path: "/admin/cuenta", label: "Mi cuenta", icon: "settings" },
@@ -45,7 +54,10 @@ export default function AdminApp({ route }: { route: Route }) {
       page = <AdminHome />
       break
     case "negocios":
-      page = route.parts[2] === "nuevo" ? <NewBusiness /> : route.parts[2] ? <BusinessDetail id={route.parts[2]} /> : <Businesses />
+      page = route.parts[2] === "nuevo" ? <NewBusiness prospectId={route.query.get("prospecto") || undefined} /> : route.parts[2] ? <BusinessDetail id={route.parts[2]} /> : <Businesses />
+      break
+    case "prospectos":
+      page = <Prospects />
       break
     case "solicitudes":
       page = <Leads />

@@ -45,7 +45,7 @@ export default function Customers({ me }: { me: api.Me }) {
     <>
       <PageHeader
         title="Clientes"
-        description="Cada cliente se registra solo al tocar la etiqueta NFC de tu sucursal y verificar su celular."
+        description="Cada cliente se registra solo al tocar la etiqueta NFC de tu sucursal."
         actions={
           me.role === "owner" && (
             <Button
@@ -109,7 +109,7 @@ export default function Customers({ me }: { me: api.Me }) {
           </div>
         ) : !rows.length ? (
           <Empty icon="users" title={list.data.length ? "Nadie coincide con tu búsqueda" : "Aún no tienes clientes"}>
-            {list.data.length ? "Prueba con otro nombre o con los últimos dígitos del celular." : "Coloca la etiqueta NFC en el mostrador para que tus clientes se registren."}
+            {list.data.length ? "Prueba con otro nombre, correo o dígitos del celular." : "Coloca la etiqueta NFC en el mostrador para que tus clientes se registren."}
           </Empty>
         ) : (
           <>
@@ -136,7 +136,7 @@ export default function Customers({ me }: { me: api.Me }) {
                               {c.name}
                             </a>
                             <small>
-                              {formatPhone(c.phone)}
+                              {c.phone ? formatPhone(c.phone) : c.email || "Sin contacto"}
                               {c.employee && " · empleado"}
                             </small>
                           </div>

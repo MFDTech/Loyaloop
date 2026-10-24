@@ -1,6 +1,8 @@
 import { useState } from "react"
 import type { CardHolder, PublicCard } from "../lib/api"
-import { cardTypeLabel, inkFor, int, money } from "../lib/util"
+import { backFields } from "../lib/passText"
+import { stampGlyph, stampStripSvg } from "../lib/stampIcons"
+import { cardTypeLabel, inkFor, int } from "../lib/util"
 import Qr from "./Qr"
 import { Icon, Segmented } from "./ui"
 
@@ -21,48 +23,14 @@ export function sampleHolder(card: PublicCard): CardHolder {
   }
 }
 
-/** Stamp strip: drawn on the server as the pass strip image. */
-function Stamps({ count, goal, ink }: { count: number; goal: number; ink: string }) {
-  const total = Math.max(goal, 1)
-  return (
-    <div className="ll-pass-stamps" style={{ gridTemplateColumns: `repeat(${Math.min(total, total > 8 ? Math.ceil(total / 2) : total)}, 1fr)` }} aria-label={`${count} de ${total} sellos`}>
-      {Array.from({ length: total }, (_, i) => (
-        <span key={i} className={i < count ? "is-on" : ""} style={{ borderColor: ink, background: i < count ? ink : "transparent" }}>
-          {i === total - 1 && i >= count ? <Icon name="gift" size={16} /> : null}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function rules(card: PublicCard): string {
-  const p = card.program
-  switch (card.type) {
-    case "stamps":
-      return `Cada compra${p.stampMinPurchase ? ` desde ${money(p.stampMinPurchase)}` : ""} suma un sello. Con ${p.stampGoal} sellos obtienes tu recompensa y la tarjeta vuelve a empezar.`
-    case "tiers":
-      return `Ganas ${int(p.pointsPerPeso * 100)} puntos por cada $100 pagados, sin propina${p.minPurchase ? `, en compras desde ${money(p.minPurchase)}` : ""}. Tu nivel depende de lo que gastas en 12 meses: ${p.tiers.map((t) => `${t.name} desde ${money(t.threshold)} (×${t.multiplier})`).join(", ")}.`
-    default:
-      return `Ganas ${int(p.pointsPerPeso * 100)} puntos por cada $100 pagados, sin propina${p.minPurchase ? `, en compras desde ${money(p.minPurchase)}` : ""}.`
-  }
-}
-
-function backFields(card: PublicCard) {
-  const fields = [
-    { label: "Cómo funciona", value: rules(card) },
-    card.rewards.length
-      ? {
-          label: "Recompensas",
-          value: card.rewards.map((r) => (card.type === "stamps" ? r.name : `${r.name}: ${int(r.cost)} puntos`)).join(" · "),
-        }
-      : null,
-    card.type !== "stamps" && card.program.expirationMonths
-      ? { label: "Vigencia", value: `Los puntos vencen tras ${card.program.expirationMonths} meses sin actividad.` }
-      : null,
-    { label: "Contacto", value: [card.contact.email, card.contact.phone].filter(Boolean).join(" · ") || "En sucursal" },
-    { label: "Condiciones", value: "Muestra el código en caja antes o después de pagar. Los beneficios están sujetos a las condiciones del negocio." },
-  ]
-  return fields.filter(Boolean) as { label: string; value: string }[]
+/** Stamp strip: the same drawing the server puts on the Apple Wallet pass. */
+function Stamps({ card, count, overStrip = false }: { card: PublicCard; count: number; overStrip?: boolean }) {
+  const { ink } = inkFor(card.brand.color)
+  const color = /^#[\da-f]{6}$/i.test(card.brand.color) ? card.brand.color : "#8A2E12"
+  const logo = card.discreet ? undefined : card.brand.logo
+  const glyph = stampGlyph(card.brand.stampIcon, !!logo)
+  const svg = stampStripSvg(count, card.program.stampGoal, { background: overStrip ? null : color, ink: overStrip ? "#FFFFFF" : ink, mark: color, glyph, logo }, 2)
+  return <img className="ll-pass-stamps" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} alt={`${count} de ${card.program.stampGoal} sellos`} />
 }
 
 export function ApplePass({ card, holder, back = false }: PassData & { back?: boolean }) {
@@ -86,9 +54,12 @@ export function ApplePass({ card, holder, back = false }: PassData & { back?: bo
               {header.value}
             </span>
           </div>
-          <div className="ll-pass-strip" style={card.brand.strip ? { backgroundImage: `url(${card.brand.strip})` } : undefined}>
+          <div
+            className={`ll-pass-strip ${stamps ? "has-stamps" : ""}`}
+            style={card.brand.strip ? { backgroundImage: stamps ? `linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(${card.brand.strip})` : `url(${card.brand.strip})` } : undefined}
+          >
             {stamps ? (
-              <Stamps count={holder.stamps} goal={card.program.stampGoal} ink={ink} />
+              <Stamps card={card} count={holder.stamps} overStrip={!!card.brand.strip} />
             ) : (
               <span className="ll-pass-primary">
                 <small style={{ color: label }}>{card.type === "tiers" ? "NIVEL" : "SALDO"}</small>
@@ -98,8 +69,8 @@ export function ApplePass({ card, holder, back = false }: PassData & { back?: bo
           </div>
           <div className="ll-pass-fields">
             <span className="ll-pass-field">
-              <small style={{ color: label }}>MIEMBRO</small>
-              {holder.name.split(" ")[0]}
+              <small style={{ color: label }}>NOMBRE</small>
+              {holder.name}
             </span>
             {holder.earnedRewards.length > 0 ? (
               <span className="ll-pass-field">
@@ -163,7 +134,7 @@ export function GooglePass({ card, holder }: PassData) {
       </div>
       {stamps && (
         <div className="ll-gpass-hero">
-          <Stamps count={holder.stamps} goal={card.program.stampGoal} ink={ink} />
+          <Stamps card={card} count={holder.stamps} />
         </div>
       )}
     </div>

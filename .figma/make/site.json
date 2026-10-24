@@ -1,15 +1,18 @@
 {
-  "description": "Tarjetas de lealtad en Apple Wallet y Google Wallet para tu negocio. Los puntos se suman solos al pagar.",
+  "description": "Tarjetas de lealtad para tu negocio en Apple Wallet y Google Wallet. Tus clientes se unen con un toque y suman puntos solos al pagar. Hecho en México.",
   "robots": {
-    "index": false
+    "index": true
   },
   "accessibility": {
     "addBypassLinks": false,
     "ignoreReducedMotion": false
   },
-  "title": "LoyaLoop",
+  "title": "LoyaLoop · Tarjetas de lealtad en Apple Wallet y Google Wallet",
   "language": "es",
   "icons": {
     "icon": "brand/loyaloop-symbol.svg"
+  },
+  "openGraph": {
+    "image": "https://loyaloop.com.mx/brand/og-image.png"
   }
 }

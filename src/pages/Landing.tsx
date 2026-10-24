@@ -1,6 +1,7 @@
-import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import * as api from "../lib/api"
-import { href } from "../lib/router"
+import { href, navigate } from "../lib/router"
+import RoiCalculator from "../components/RoiCalculator"
 import { Button, Icon, Logo, asset, type IconName } from "../components/ui"
 
 function scrollToId(id: string) {
@@ -53,6 +54,57 @@ function LoyaltyCard() {
   )
 }
 
+const DEMO_KEY = "ll_demo_card"
+
+/** Saves a LoyaLoop demo card straight to the visitor's Wallet. */
+function DemoButtons() {
+  const [busy, setBusy] = useState<"" | "apple" | "google">("")
+  const [error, setError] = useState("")
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent
+  const android = /Android/.test(ua)
+  async function add(wallet: "apple" | "google") {
+    setBusy(wallet)
+    setError("")
+    try {
+      let token = ""
+      try {
+        token = localStorage.getItem(DEMO_KEY) || ""
+      } catch {
+        /* private mode */
+      }
+      const r = await api.demoCard(token)
+      try {
+        localStorage.setItem(DEMO_KEY, r.holder.token)
+      } catch {
+        /* private mode */
+      }
+      const url = r.links[wallet]
+      if (url) window.location.href = url
+      else navigate("/demo")
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy("")
+    }
+  }
+  const apple = (
+    <button key="apple" type="button" className="ll-wallet-btn" disabled={!!busy} onClick={() => add("apple")}>
+      <Icon name="wallet" size={22} /> {busy === "apple" ? "Preparando…" : "Agregar a Apple Wallet"}
+    </button>
+  )
+  const google = (
+    <button key="google" type="button" className="ll-wallet-btn is-google" disabled={!!busy} onClick={() => add("google")}>
+      <Icon name="wallet" size={22} /> {busy === "google" ? "Preparando…" : "Agregar a Google Wallet"}
+    </button>
+  )
+  return (
+    <div className="ll-demo-actions">
+      {android ? [google, apple] : [apple, google]}
+      {error && <p className="call-form-message is-error">{error}</p>}
+    </div>
+  )
+}
+
 const CARD_TYPES: [IconName, string, string][] = [
   ["star", "Puntos", "Suman según lo que gasta cada cliente, sin contar la propina."],
   ["coffee", "Sellos", "Una compra, un sello. Al completar la tarjeta, la recompensa es suya."],
@@ -60,12 +112,33 @@ const CARD_TYPES: [IconName, string, string][] = [
   ["layers", "Niveles", "Clientes que suben de nivel con su gasto del año y ganan más puntos."],
 ]
 
+const STARTER_FEATURES = [
+  "Tarjeta de sellos con tu logo y tus colores",
+  "Apple Wallet y Google Wallet",
+  "Registro con QR o etiqueta NFC",
+  "Un sello por visita escaneando en la caja",
+  "Modo discreto",
+  "1 sucursal",
+]
+
+const PRO_FEATURES = [
+  "Todo lo de Starter",
+  "Puntos automáticos desde tu terminal (Mercado Pago, Clip)",
+  "Sellos, puntos, recompensas y niveles",
+  "Avisos y promociones al celular",
+  "Protección contra abusos en caja",
+  "Etiqueta NFC y escáner para cada caja",
+  "Te ayudamos a configurarla",
+]
+
 const FAQ: [string, string][] = [
-  ["¿Mis clientes tienen que descargar una app?", "No. Tocan la etiqueta NFC de tu mostrador (o escanean su QR), confirman su celular y guardan la tarjeta en Apple Wallet o Google Wallet."],
+  ["¿Mis clientes tienen que descargar una app?", "No. Tocan la etiqueta NFC de tu mostrador (o escanean su QR), escriben su nombre y guardan la tarjeta en Apple Wallet o Google Wallet. No piden su celular."],
   ["¿El cajero tiene que capturar algo?", "No. El cliente muestra el QR de su tarjeta y paga como siempre. LoyaLoop recibe el cobro de tu terminal y suma los puntos solo, sin que nadie escriba montos."],
   ["¿Con qué terminales funciona?", "Empezamos con Mercado Pago Point y después Clip. Si tu tarjeta es de sellos, también puede sumar un sello por visita sin terminal conectada."],
   ["¿Puedo personalizar mi tarjeta?", "Sí. Usamos tu logo, tus colores y las reglas que quieras: cuántos puntos da cada compra, compra mínima, vencimiento, bonos de bienvenida y cumpleaños."],
-  ["¿Funciona con varias sucursales?", "Sí. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Se cobra por sucursal."],
+  ["¿Funciona con varias sucursales?", "Sí, en el plan Pro. Cada sucursal tiene su etiqueta, sus cajas y su escáner, y ves todo junto o por sucursal en tu panel. Cada sucursal adicional cuesta $250 al mes."],
+  ["¿Cómo empiezo con Starter?", "Agenda una llamada: te mostramos cómo funciona, creamos tu cuenta y tú pones tu logo, colores y recompensa. Imprimes el QR para tu mostrador y activamos tu tarjeta en cuanto recibamos tu pago. Sin plazo forzoso."],
+  ["¿Cuál es la diferencia entre Starter y Pro?", "En Starter el cliente escanea su QR en la caja y gana un sello por visita; su tarjeta se actualiza sola, pero no recibe avisos ni promociones. En Pro conectamos tu terminal de cobro, los puntos se suman solos según lo que pagan y tus clientes reciben avisos y promociones en su celular."],
 ]
 
 export default function Landing() {
@@ -103,42 +176,62 @@ export default function Landing() {
 
   const agenda = () => scrollToId("agenda")
 
+  // Links from other pages (#/?s=agenda) land on a section.
+  useEffect(() => {
+    const section = window.location.hash.match(/[?&]s=([a-z]+)/)?.[1]
+    if (section) window.setTimeout(() => scrollToId(section), 50)
+  }, [])
+
+  // The top bar stays visible; once the page moves it gets a solid background and a line.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   return (
     <div className="landing">
-      <header className="site-header container">
-        <Logo />
-        <nav className={mobileMenu ? "open" : ""} aria-label="Secciones">
-          <Jump to="how-it-works" onDone={() => setMobileMenu(false)}>
-            Cómo funciona
-          </Jump>
-          <Jump to="features" onDone={() => setMobileMenu(false)}>
-            Funciones
-          </Jump>
-          <Jump to="pricing" onDone={() => setMobileMenu(false)}>
-            Precio
-          </Jump>
-          <Jump to="faq" onDone={() => setMobileMenu(false)}>
-            Preguntas
-          </Jump>
-          <Jump to="agenda" className="mobile-only-link" onDone={() => setMobileMenu(false)}>
-            Agenda una llamada
-          </Jump>
-          <a className="mobile-only-link" href={href("/login")}>
-            Iniciar sesión
-          </a>
-        </nav>
-        <div className="header-actions">
-          <a className="login-link" href={href("/login")}>
-            Iniciar sesión <Icon name="arrow" size={16} />
-          </a>
-          <Button onClick={agenda}>
-            Agenda una llamada <Icon name="arrow" size={16} />
-          </Button>
-        </div>
-        <button className="menu-button" aria-label={mobileMenu ? "Cerrar menú" : "Abrir menú"} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>
-          <Icon name={mobileMenu ? "close" : "menu"} />
-        </button>
-      </header>
+      <div className={`ll-topbar${scrolled ? " is-scrolled" : ""}`}>
+        <header className="site-header container">
+          <Logo />
+          <nav className={mobileMenu ? "open" : ""} aria-label="Secciones">
+            <Jump to="how-it-works" onDone={() => setMobileMenu(false)}>
+              Cómo funciona
+            </Jump>
+            <Jump to="features" onDone={() => setMobileMenu(false)}>
+              Funciones
+            </Jump>
+            <Jump to="calculadora" onDone={() => setMobileMenu(false)}>
+              Calculadora
+            </Jump>
+            <Jump to="pricing" onDone={() => setMobileMenu(false)}>
+              Precio
+            </Jump>
+            <Jump to="faq" onDone={() => setMobileMenu(false)}>
+              Preguntas
+            </Jump>
+            <Jump to="agenda" className="mobile-only-link" onDone={() => setMobileMenu(false)}>
+              Agenda una llamada
+            </Jump>
+            <a className="mobile-only-link" href={href("/login")}>
+              Iniciar sesión
+            </a>
+          </nav>
+          <div className="header-actions">
+            <a className="login-link" href={href("/login")}>
+              Iniciar sesión <Icon name="arrow" size={16} />
+            </a>
+            <Button onClick={agenda}>
+              Agenda una llamada <Icon name="arrow" size={16} />
+            </Button>
+          </div>
+          <button className="menu-button" aria-label={mobileMenu ? "Cerrar menú" : "Abrir menú"} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>
+            <Icon name={mobileMenu ? "close" : "menu"} />
+          </button>
+        </header>
+      </div>
       <main>
         <section className="hero container">
           <div className="hero-copy">
@@ -157,8 +250,8 @@ export default function Landing() {
               <Button onClick={agenda}>
                 Agenda una llamada <Icon name="arrow" size={18} />
               </Button>
-              <Button secondary onClick={() => scrollToId("how-it-works")}>
-                Ver cómo funciona
+              <Button secondary onClick={() => scrollToId("demo")}>
+                Pruébala en tu celular
               </Button>
             </div>
           </div>
@@ -262,6 +355,18 @@ export default function Landing() {
           </div>
         </section>
 
+        <section id="demo" className="container ll-demo-section">
+          <div className="ll-demo-copy">
+            <span className="eyebrow">PRUÉBALA EN 20 SEGUNDOS</span>
+            <h2>Llévate una tarjeta LoyaLoop en tu celular.</h2>
+            <p>Un toque y queda en tu Wallet, igual que la de tus clientes. Luego simula una visita: verás el sello sumarse y el aviso llegar a tu pantalla.</p>
+            <a className="ll-link ll-demo-more" href={href("/demo")}>
+              Ver la tarjeta y simular una visita
+            </a>
+          </div>
+          <DemoButtons />
+        </section>
+
         <section id="how-it-works" className="how-section section container">
           <div className="section-heading">
             <div>
@@ -310,7 +415,7 @@ export default function Landing() {
                 <span>02</span>
                 <h3>Tus clientes se unen con un toque</h3>
               </div>
-              <p>Acercan su celular a la etiqueta NFC del mostrador, confirman su número y guardan la tarjeta en Apple Wallet o Google Wallet.</p>
+              <p>Acercan su celular a la etiqueta NFC del mostrador, escriben su nombre y guardan la tarjeta en Apple Wallet o Google Wallet.</p>
             </article>
             <article>
               <div className="step-visual grow-visual">
@@ -447,6 +552,15 @@ export default function Landing() {
           </div>
         </section>
 
+        <section id="calculadora" className="section container ll-calc-section">
+          <span className="eyebrow">HAZ LAS CUENTAS</span>
+          <h2>
+            ¿Cuánto vale que <em>vuelvan una vez más?</em>
+          </h2>
+          <p className="ll-calc-lead">Mueve los números de tu negocio y ve cuánto suman unas pocas visitas extra al mes.</p>
+          <RoiCalculator onCall={agenda} />
+        </section>
+
         <section id="pricing" className="section container pricing-section">
           <span className="eyebrow">UN PRECIO JUSTO. SIN SORPRESAS.</span>
           <h2>
@@ -454,30 +568,70 @@ export default function Landing() {
             <br />
             <em>Relaciones duraderas.</em>
           </h2>
-          <p>Un solo plan. Pagas por cada sucursal activa, cada mes.</p>
-          <div className="ll-price-single">
-            <div>
-              <h3>Por sucursal</h3>
-              <p>Te damos el precio en la llamada según tu número de sucursales. Sin costo por cliente y sin permanencia forzosa.</p>
-              <Button onClick={agenda} className="mt-5">
+          <p>Clientes ilimitados en los dos planes. Sin costo por cliente y sin permanencia forzosa.</p>
+          <div className="ll-plans">
+            <article className="ll-plan">
+              <h3>Starter</h3>
+              <p className="ll-plan-for">Para empezar hoy y configurarla tú mismo.</p>
+              <div className="ll-plan-price">
+                <strong>$390</strong>
+                <span>MXN al mes</span>
+              </div>
+              <ul>
+                {STARTER_FEATURES.map((f) => (
+                  <li key={f}>
+                    <Icon name="check" size={18} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Button onClick={agenda}>
                 Agenda una llamada <Icon name="arrow" size={16} />
               </Button>
-            </div>
-            <ul>
-              {[
-                "Tarjeta con tu marca en Apple Wallet y Google Wallet",
-                "Clientes ilimitados",
-                "Etiqueta NFC y escáner para cada caja",
-                "Conexión con tu terminal de cobro",
-                "Panel para dueño, gerentes y cajeros",
-                "Configuración y soporte de LoyaLoop",
-              ].map((f) => (
-                <li key={f}>
-                  <Icon name="check" size={18} />
-                  {f}
-                </li>
-              ))}
-            </ul>
+              <small>Te mostramos cómo funciona y dejamos tu tarjeta lista. Sin plazo forzoso.</small>
+            </article>
+            <article className="ll-plan is-featured">
+              <span className="ll-plan-tag">PUNTOS AUTOMÁTICOS</span>
+              <h3>Pro</h3>
+              <p className="ll-plan-for">Para negocios que cobran con terminal y quieren que todo se sume solo.</p>
+              <div className="ll-plan-price">
+                <strong>$990</strong>
+                <span>MXN al mes</span>
+              </div>
+              <ul>
+                {PRO_FEATURES.map((f) => (
+                  <li key={f}>
+                    <Icon name="check" size={18} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Button onClick={agenda}>
+                Agenda una llamada <Icon name="arrow" size={16} />
+              </Button>
+              <small>Instalación gratis si pagas 4 meses por adelantado.</small>
+            </article>
+          </div>
+          <div className="ll-plan-extras">
+            <h3>Servicios opcionales</h3>
+            <dl>
+              <div>
+                <dt>Sucursal adicional</dt>
+                <dd>$250 al mes cada una</dd>
+              </div>
+              <div>
+                <dt>Instalación llave en mano</dt>
+                <dd>$1,500 una vez · gratis en Pro pagando 4 meses por adelantado</dd>
+              </div>
+              <div>
+                <dt>Gestión mensual</dt>
+                <dd>$990 al mes: promociones, avisos y reporte</dd>
+              </div>
+              <div>
+                <dt>Pago anual</dt>
+                <dd>12 meses al precio de 10</dd>
+              </div>
+            </dl>
           </div>
         </section>
 
@@ -537,7 +691,7 @@ export default function Landing() {
               </li>
               <li>
                 <Icon name="check" size={17} />
-                Precio para tu número de sucursales
+                El plan que le conviene a tu negocio
               </li>
               <li>
                 <Icon name="check" size={17} />

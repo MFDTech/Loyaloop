@@ -8,10 +8,13 @@ import { dateTime, formatPhone, int, isEmail, money, roleLabel } from "../../lib
 import { PassPreview, sampleHolder } from "../../components/Pass"
 import { Badge, Button, Card, Confirm, CopyButton, Empty, ErrorState, Field, Icon, Loading, Notice, PageHeader, SelectField, Tabs, useToast } from "../../components/ui"
 import { statusLabel, statusTone } from "./Businesses"
+import { monthlyAmount } from "../../lib/service"
+
+const BILLING_LABEL = { pending: "esperando tarjeta", authorized: "activo", paused: "pausado", cancelled: "cancelado" } as const
 import { SECTORS } from "./NewBusiness"
 import { BrandEditor, NumberField, ProgramEditor, draftCard, type BrandDraft, type ProgramDraft } from "./ProgramEditor"
 
-type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[] }
+type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[]; customerCount: number }
 type Tab = "datos" | "tarjeta" | "cobro" | "pruebas" | "bitacora"
 
 export default function BusinessDetail({ id }: { id: string }) {
@@ -69,8 +72,19 @@ export default function BusinessDetail({ id }: { id: string }) {
 
 function DataTab({ data }: { data: AdminBundle }) {
   const business = data.business
-  const [form, setForm] = useState({ name: business.name, sector: business.sector, contactName: business.contactName, email: business.email, phone: business.phone })
+  const [form, setForm] = useState({
+    name: business.name,
+    sector: business.sector,
+    contactName: business.contactName,
+    email: business.email,
+    phone: business.phone,
+    legalName: business.legalName || "",
+    legalAddress: business.legalAddress || "",
+    privacyEmail: business.privacyEmail || "",
+  })
   const [status, setStatus] = useState<BusinessStatus | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [price, setPrice] = useState(business.monthlyPrice ? String(business.monthlyPrice) : "")
   const save = useAction(api.adminUpdateBusiness)
   const toast = useToast()
   const set = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value })
@@ -83,6 +97,7 @@ function DataTab({ data }: { data: AdminBundle }) {
             onSubmit={async (e) => {
               e.preventDefault()
               if (!isEmail(form.email)) return save.setError("El correo de contacto no es válido.")
+              if (form.privacyEmail && !isEmail(form.privacyEmail)) return save.setError("El correo para privacidad no es válido.")
               const r = await save.run(business.id, form)
               if (r.ok) toast("Datos guardados.")
             }}
@@ -100,6 +115,10 @@ function DataTab({ data }: { data: AdminBundle }) {
               <Field label="Correo de contacto" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
               <Field label="Teléfono" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
+            <p className="ll-hint">Para el aviso de privacidad de su tarjeta: el negocio es el responsable de los datos de sus clientes.</p>
+            <Field label="Razón social o nombre del responsable" value={form.legalName} placeholder={business.name} onChange={(e) => set("legalName", e.target.value)} />
+            <Field label="Domicilio" value={form.legalAddress} placeholder="Si lo dejas vacío, se usa la dirección de la sucursal" onChange={(e) => set("legalAddress", e.target.value)} />
+            <Field label="Correo para privacidad" type="email" value={form.privacyEmail} placeholder={business.email} onChange={(e) => set("privacyEmail", e.target.value)} />
             {save.error && <Notice tone="error">{save.error}</Notice>}
             <div className="ll-form-actions">
               <Button type="submit" loading={save.pending}>
@@ -130,17 +149,85 @@ function DataTab({ data }: { data: AdminBundle }) {
         </Card>
       </div>
       <div className="ll-stack">
+        <Card title="Plan">
+          <div className="ll-stack">
+            <p className="ll-hint">
+              {business.plan === "starter"
+                ? "Starter: una sucursal, tarjeta de sellos que el dueño edita solo, sin avisos ni promociones."
+                : "Pro: terminal conectada, todos los tipos de tarjeta y sucursales adicionales ($250 cada una)."}{" "}
+              Cobra <b>{money(monthlyAmount(business, data.branches.length))} al mes</b>
+              {business.monthlyPrice ? " (precio acordado)" : ""}.
+            </p>
+            {business.billing ? (
+              <p className="ll-hint">
+                Pago automático: <b>{BILLING_LABEL[business.billing.status]}</b> · {business.billing.payerEmail}
+                {business.billing.paidUntil ? ` · pagado hasta el ${new Date(business.billing.paidUntil).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                {business.charges?.[0] ? ` · último cobro ${business.charges[0].status === "approved" ? "aprobado" : business.charges[0].status === "rejected" ? "rechazado" : "en proceso"}` : ""}
+              </p>
+            ) : (
+              <p className="ll-hint">Sin pago automático: paga por transferencia o aún no lo activa desde su panel.</p>
+            )}
+            <form
+              className="ll-row"
+              style={{ alignItems: "flex-end" }}
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const value = price.trim() ? Number(price) : null
+                const r = await save.run(business.id, { monthlyPrice: value })
+                if (r.ok) toast(value ? "Precio acordado guardado." : "Vuelve al precio del plan.")
+              }}
+            >
+              <Field label="Precio acordado al mes" type="number" min={0} placeholder="Precio del plan" value={price} onChange={(e) => setPrice(e.target.value)} hint="Vacío: el del plan. Si tiene pago automático, Mercado Pago cobra el nuevo monto desde el siguiente mes." />
+              <Button type="submit" variant="secondary" size="sm" loading={save.pending}>
+                Guardar precio
+              </Button>
+            </form>
+            <div className="ll-row">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={save.pending}
+                onClick={async () => {
+                  const r = await save.run(business.id, { plan: business.plan === "starter" ? "pro" : "starter" })
+                  if (r.ok) toast(business.plan === "starter" ? "Ahora está en Pro." : "Ahora está en Starter.")
+                }}
+              >
+                {business.plan === "starter" ? "Cambiar a Pro" : "Cambiar a Starter"}
+              </Button>
+            </div>
+          </div>
+        </Card>
         <Card title="Estado de la cuenta">
           <div className="ll-stack">
             <p className="ll-hint">
               {business.status === "paused"
                 ? "La cuenta está pausada: el equipo no puede entrar, el registro está cerrado y los escáneres no suman."
-                : business.status === "trial"
-                  ? "En prueba: todo funciona y aún no se cobra."
-                  : "Activa: se cobra por sucursal cada mes."}
+                : business.status === "pending"
+                  ? "Se dio de alta desde la página y espera activación: el dueño ya diseña su tarjeta, pero el registro y la caja están cerrados. Actívala cuando pague o dale una prueba."
+                  : business.status === "trial"
+                    ? business.trialEndsAt
+                      ? `En prueba hasta el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}. Después se cierra el registro hasta que la actives.`
+                      : "En prueba: todo funciona y aún no se cobra."
+                    : "Activa: se cobra cada mes."}
             </p>
             <div className="ll-row">
-              {(["active", "trial", "paused"] as BusinessStatus[])
+              {[14, 30].map((days) => (
+                <Button
+                  key={days}
+                  variant="secondary"
+                  size="sm"
+                  disabled={save.pending}
+                  onClick={async () => {
+                    const r = await save.run(business.id, { trialDays: days })
+                    if (r.ok) toast(`Prueba de ${days} días activada.`)
+                  }}
+                >
+                  Dar prueba de {days} días
+                </Button>
+              ))}
+            </div>
+            <div className="ll-row">
+              {(["active", "paused"] as BusinessStatus[])
                 .filter((s) => s !== business.status)
                 .map((s) => (
                   <Button key={s} variant={s === "paused" ? "danger" : "secondary"} size="sm" onClick={() => setStatus(s)}>
@@ -166,11 +253,70 @@ function DataTab({ data }: { data: AdminBundle }) {
             ))}
           </ul>
         </Card>
+        {!business.demo && (
+          <Card title="Eliminar negocio" description="Para negocios de prueba o que ya no trabajan con LoyaLoop. No se puede deshacer.">
+            <div className="ll-stack">
+              <p className="ll-hint">
+                Se borran su tarjeta, sus {int(data.customerCount)} {data.customerCount === 1 ? "cliente" : "clientes"} con todo su historial, sus sucursales, escáneres y equipo. Si solo quieres
+                detenerlo un tiempo, mejor páusalo.
+              </p>
+              <div className="ll-row">
+                <Button variant="danger" size="sm" onClick={() => setDeleting(true)}>
+                  <Icon name="trash" size={16} /> Eliminar negocio
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
       {status && (
         <StatusConfirm businessId={business.id} name={business.name} status={status} onClose={() => setStatus(null)} />
       )}
+      {deleting && <DeleteConfirm data={data} onClose={() => setDeleting(false)} />}
     </div>
+  )
+}
+
+function DeleteConfirm({ data, onClose }: { data: AdminBundle; onClose: () => void }) {
+  const { business, customerCount, branches, devices, team } = data
+  const [typed, setTyped] = useState("")
+  const { run, pending, error } = useAction(api.adminDeleteBusiness)
+  const toast = useToast()
+  const plain = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+  const matches = plain(typed) === plain(business.name)
+  const plural = (n: number, one: string, many: string) => `${int(n)} ${n === 1 ? one : many}`
+  return (
+    <Confirm
+      title={`¿Eliminar ${business.name}?`}
+      confirmLabel="Eliminar para siempre"
+      tone="danger"
+      pending={pending}
+      error={error}
+      disabled={!matches}
+      onClose={onClose}
+      onConfirm={async () => {
+        const r = await run(business.id, typed)
+        if (r.ok) {
+          toast(`Se eliminó ${business.name}.`)
+          navigate("/admin/negocios")
+        }
+      }}
+    >
+      <div className="ll-stack">
+        <p>Esto no se puede deshacer. Se borran:</p>
+        <ul className="ll-bullets">
+          <li>{customerCount ? `${plural(customerCount, "cliente", "clientes")} con sus puntos, sellos, recompensas e historial.` : "Su tarjeta y reglas (aún no tiene clientes)."}</li>
+          <li>
+            {plural(branches.length, "sucursal", "sucursales")}
+            {devices.length ? ` y ${plural(devices.length, "escáner", "escáneres")}, que quedan desvinculados` : ""}.
+          </li>
+          {team.length > 0 && <li>{team.length === 1 ? "1 persona del equipo: ya no podrá entrar." : `${int(team.length)} personas del equipo: ya no podrán entrar.`}</li>}
+          <li>Su tarjeta: en Google Wallet aparece como vencida y en iPhone deja de actualizarse.</li>
+        </ul>
+        {customerCount > 0 && <p className="ll-hint">Si el dueño quiere su lista de clientes, entra a su cuenta y exporta el CSV antes de eliminar.</p>}
+        <Field label={`Escribe «${business.name}» para confirmar`} value={typed} autoComplete="off" data-autofocus onChange={(e) => setTyped(e.target.value)} />
+      </div>
+    </Confirm>
   )
 }
 
@@ -205,7 +351,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
 function CardTab({ data }: { data: AdminBundle }) {
   const { businessId: _ignored, ...current } = data.program
   const [program, setProgram] = useState<ProgramDraft>(current)
-  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts })
+  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts, askPhone: !!data.business.askPhone })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const toast = useToast()
@@ -234,7 +380,7 @@ function CardTab({ data }: { data: AdminBundle }) {
           <ProgramEditor value={program} onChange={setProgram} rewards={rewards} />
         </Card>
         <Card title="Marca y privacidad">
-          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} />
+          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} stamps={program.type === "stamps"} />
         </Card>
         <Card title="Recompensas" description="El dueño y el gerente las editan desde su panel.">
           {rewards.length ? (
