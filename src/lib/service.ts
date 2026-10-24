@@ -2175,7 +2175,10 @@ export function createService(store: Store, ctx: Context) {
     const device = token ? await store.deviceByToken(token) : undefined
     if (!device) throw new ApiError("Este escáner ya no está vinculado.", "unpaired")
     const business = await store.business(device.businessId)
-    if (!business || business.status === "paused") throw new ApiError("La cuenta del negocio está pausada.", "paused")
+    // «vinculado» sends the scanner back to the pairing screen.
+    if (!business) throw new ApiError("Este escáner ya no está vinculado: su negocio ya no existe en LoyaLoop.", "unpaired")
+    if (business.status === "paused")
+      throw new ApiError(`La cuenta de ${business.discreet ? business.neutralName : business.name} está pausada en LoyaLoop, así que no se suman visitas. Para reactivarla, el dueño puede escribir a hola@loyaloop.com.mx.`, "paused")
     if (business.status === "pending") throw new ApiError("Tu tarjeta aún no está activa. Escríbenos a hola@loyaloop.com.mx para activarla.", "paused")
     if (trialOver(business)) throw new ApiError("Terminó la prueba. Activa tu plan para seguir sumando visitas.", "paused")
     return device

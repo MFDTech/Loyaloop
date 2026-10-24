@@ -730,6 +730,16 @@ for (const [label, make] of backends) {
         expect((await api.bundle()).devices.map((d) => d.registerId)).toEqual(["rg_esq_condesa"])
       })
 
+      it("says which business is paused and works again once it is activated", async () => {
+        await as("dueno@laesquina.test")
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Tablet")
+        await admin()
+        await api.adminUpdateBusiness("b_esquina", { status: "paused" })
+        await expect(api.kiosk()).rejects.toThrow(/Café La Esquina está pausada/)
+        await api.adminUpdateBusiness("b_esquina", { status: "active" })
+        expect((await api.kiosk()).businessId).toBe("b_esquina")
+      })
+
       it("stops a kiosk once it is unpaired", async () => {
         useAffairTablet()
         await api.kiosk()
