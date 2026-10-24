@@ -208,6 +208,32 @@ export function createPgStore(pool: Pool, now: () => number = Date.now): Store {
     async business(id) {
       return (await pool.query("select data from businesses where pk = $1", [id])).rows[0]?.data
     },
+    async deleteBusiness(id) {
+      await transaction(pool, async (client) => {
+        // Same locks as any write to LoyaLoop's global data or to this business.
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [lockKey("global")])
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [lockKey({ business: id })])
+        const team = (await client.query<{ pk: string }>("select pk from users where business_id = $1", [id])).rows.map((r) => r.pk)
+        // Google Wallet cards stop working on the phones (expired); Apple ones stop updating.
+        await client.query("delete from wallet_jobs where business_id = $1", [id])
+        await client.query(
+          `insert into wallet_jobs (kind, business_id, ref) select 'expire', business_id, google_object_id from wallet_passes
+           where business_id = $1 and google_object_id is not null on conflict do nothing`,
+          [id],
+        )
+        await client.query("delete from apple_registrations where serial in (select apple_serial from wallet_passes where business_id = $1 and apple_serial is not null)", [id])
+        await client.query("delete from wallet_passes where business_id = $1", [id])
+        await client.query("delete from webhook_events where business_id = $1", [id])
+        // Leads, prospects and reset links have no business; the rest is erased by business_id.
+        for (const key of KEYS) if (TABLES[key].table !== "leads" && TABLES[key].table !== "prospects" && TABLES[key].table !== "resets") await client.query(`delete from ${TABLES[key].table} where business_id = $1`, [id])
+        await client.query("delete from maintenance where business_id = $1", [id])
+        if (team.length) {
+          await client.query("delete from sessions where user_id = any($1)", [team])
+          await client.query("delete from resets where data->>'userId' = any($1)", [team])
+        }
+        await client.query("update sessions set impersonating = null where impersonating = $1", [id])
+      })
+    },
     async deviceByToken(token) {
       return (await pool.query("select data from devices where data->>'token' = $1", [token])).rows[0]?.data
     },

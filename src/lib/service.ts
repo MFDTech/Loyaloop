@@ -81,6 +81,8 @@ export interface Store {
   notices(businessId: string, limit: number): Promise<WalletNotice[]>
   audit(query: { businessId?: string; limit: number }): Promise<AuditEntry[]>
   businessStats(since: string): Promise<{ businessId: string; customers: number; branches: number; transactions: number; inReview: number }[]>
+  /** Erases a business and everything in it: team, branches, scanners, customers, history and passes. */
+  deleteBusiness(id: string): Promise<void>
 }
 
 export interface EmailMessage {
@@ -1227,7 +1229,7 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function adminBundle(businessId: string): Promise<Bundle & { team: TeamMember[]; audit: AuditEntry[] }> {
+  async function adminBundle(businessId: string): Promise<Bundle & { team: TeamMember[]; audit: AuditEntry[]; customerCount: number }> {
     await asAdmin()
     if (!(await store.business(businessId))) throw new ApiError("El negocio no existe.", "not_found")
     const db = await store.read(B(businessId))
@@ -1235,7 +1237,36 @@ export function createService(store: Store, ctx: Context) {
       ...bundleOf(db, businessId),
       team: db.users.filter((u) => u.businessId === businessId).map(publicUser),
       audit: await store.audit({ businessId, limit: 200 }),
+      customerCount: db.customers.filter((c) => c.businessId === businessId).length,
     }
+  }
+
+  /**
+   * Erases a business for good: its team can no longer sign in, its scanners
+   * unpair and its customers' data is gone. The admin types the name to confirm.
+   */
+  async function adminDeleteBusiness(businessId: string, confirmName: string): Promise<{ customers: number }> {
+    const a = await asAdmin()
+    if (businessId === DEMO_BUSINESS_ID) throw new ApiError("La tarjeta de demostración de LoyaLoop no se puede eliminar.")
+    const business = await store.business(businessId)
+    if (!business) throw new ApiError("El negocio no existe.", "not_found")
+    const plain = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+    if (plain(String(confirmName ?? "")) !== plain(business.name)) throw new ApiError(`Escribe el nombre del negocio, «${business.name}», para confirmar.`)
+    if (business.billing?.status === "authorized") throw new ApiError("Este negocio tiene el pago automático activo. Cancélalo primero en la pestaña Cobro.")
+    const customers = (await store.read(B(businessId))).customers.filter((c) => c.businessId === businessId).length
+    await store.deleteBusiness(businessId)
+    await store.write("global", (db) => {
+      for (const p of db.prospects)
+        if (p.businessId === businessId) {
+          delete p.businessId
+          p.updatedAt = iso()
+          p.log.unshift({ at: iso(), text: "Se eliminó su cuenta de LoyaLoop", by: a.user.name })
+        }
+      audit(db, a, undefined, "Eliminó un negocio", `${business.name}, con ${customers} ${customers === 1 ? "cliente" : "clientes"}`, now())
+    })
+    const session = await ctx.session()
+    if (session?.impersonating === businessId) await ctx.setSession({ ...session, impersonating: undefined })
+    return { customers }
   }
 
   async function createBusiness(input: NewBusiness): Promise<{ id: string; inviteLink: string; emailed: boolean }> {
@@ -2322,6 +2353,7 @@ export function createService(store: Store, ctx: Context) {
     createBusiness,
     adminSaveProgram,
     adminUpdateBusiness,
+    adminDeleteBusiness,
     adminSetIntegration,
     adminMetrics,
     adminAudit,
@@ -2372,7 +2404,7 @@ export const PUBLIC_METHODS = [
   "bundle", "customers", "customer", "adjustBalance", "exportCustomersCsv", "activity", "refundPurchase", "reviewQueue", "resolveReview",
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "prospects", "saveProspect", "addProspectNote", "deleteProspect", "simulatePayment",
+  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminDeleteBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "prospects", "saveProspect", "addProspectNote", "deleteProspect", "simulatePayment",
   "billing", "startSubscription", "refreshBilling", "cancelSubscription",
   "registration", "privacyNotice", "signupBusiness", "saveCard", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",

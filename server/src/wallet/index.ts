@@ -208,6 +208,8 @@ export function createWallets(pool: Pool, google: GoogleWallet | null, appleWall
 
   async function runGoogle(job: Job) {
     if (!google) return
+    // The business was deleted; ref is the Google object id.
+    if (job.kind === "expire") return google.expireObject(job.ref)
     if (job.kind === "class") {
       const data = await loadPass(pool, job.business_id)
       if (data) await syncClass(data, true)

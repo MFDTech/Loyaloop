@@ -192,6 +192,15 @@ export class GoogleWallet {
     return this.upsert("loyaltyObject", this.buildObject(data))
   }
 
+  /** The business was deleted: the card shows as expired in Google Wallet. */
+  async expireObject(objectId: string) {
+    try {
+      await this.call("PATCH", `/loyaltyObject/${encodeURIComponent(objectId)}`, { state: "EXPIRED" })
+    } catch (error) {
+      if (!(error instanceof GoogleWalletError) || error.status !== 404) throw error
+    }
+  }
+
   /** A message on the pass. TEXT_AND_NOTIFY also shows a notification on the phone. */
   async addMessage(customerId: string, message: { id: string; header: string; body: string }) {
     try {

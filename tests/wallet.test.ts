@@ -251,6 +251,26 @@ describe.skipIf(!TEST_DATABASE_URL)("Google Wallet with the server", () => {
     expect(cls.hexBackgroundColor).toBe("#123456")
   })
 
+  it("expires the Google cards of a deleted business and erases its data", async () => {
+    const { holder } = await register("5577007788")
+    const login = await app.request("/api/rpc/login", { method: "POST", headers: { "content-type": "application/json", "x-loyaloop": "1" }, body: JSON.stringify({ args: ["admin@loyaloop.test", "loyaloop123"] }) })
+    const cookie = login.headers.get("set-cookie")!.split(";")[0]
+    const deleted = await rpc("adminDeleteBusiness", ["b_affair", "Affair Love Suites"], { cookie })
+    expect(deleted.error).toBeUndefined()
+    const left = await pool.query(
+      `select (select count(*) from businesses where pk = 'b_affair')::int as businesses, (select count(*) from customers where business_id = 'b_affair')::int as customers,
+              (select count(*) from users where business_id = 'b_affair')::int as users, (select count(*) from transactions where business_id = 'b_affair')::int as transactions,
+              (select count(*) from wallet_passes)::int as passes, (select count(*) from customers where business_id = 'b_esquina')::int as esquina`,
+    )
+    expect(left.rows[0]).toMatchObject({ businesses: 0, customers: 0, users: 0, transactions: 0, passes: 0 })
+    expect(left.rows[0].esquina).toBeGreaterThan(0)
+    g.calls.length = 0
+    expect(await wallets.work()).toBe(1)
+    expect(g.calls).toEqual([expect.objectContaining({ method: "PATCH", body: { state: "EXPIRED" } })])
+    const object = [...g.resources.values()].find((r) => r.accountId === holder.token)
+    expect(object.state).toBe("EXPIRED")
+  })
+
   it("serves business logos for Google and falls back to the LoyaLoop icon", async () => {
     const png = "data:image/png;base64," + Buffer.from("fake-png").toString("base64")
     await pool.query("update businesses set data = jsonb_set(data, '{brand,logo}', to_jsonb($1::text)) where pk = 'b_esquina'", [png])

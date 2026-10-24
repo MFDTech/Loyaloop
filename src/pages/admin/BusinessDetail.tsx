@@ -14,7 +14,7 @@ const BILLING_LABEL = { pending: "esperando tarjeta", authorized: "activo", paus
 import { SECTORS } from "./NewBusiness"
 import { BrandEditor, NumberField, ProgramEditor, draftCard, type BrandDraft, type ProgramDraft } from "./ProgramEditor"
 
-type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[] }
+type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[]; customerCount: number }
 type Tab = "datos" | "tarjeta" | "cobro" | "pruebas" | "bitacora"
 
 export default function BusinessDetail({ id }: { id: string }) {
@@ -83,6 +83,7 @@ function DataTab({ data }: { data: AdminBundle }) {
     privacyEmail: business.privacyEmail || "",
   })
   const [status, setStatus] = useState<BusinessStatus | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [price, setPrice] = useState(business.monthlyPrice ? String(business.monthlyPrice) : "")
   const save = useAction(api.adminUpdateBusiness)
   const toast = useToast()
@@ -252,11 +253,70 @@ function DataTab({ data }: { data: AdminBundle }) {
             ))}
           </ul>
         </Card>
+        {!business.demo && (
+          <Card title="Eliminar negocio" description="Para negocios de prueba o que ya no trabajan con LoyaLoop. No se puede deshacer.">
+            <div className="ll-stack">
+              <p className="ll-hint">
+                Se borran su tarjeta, sus {int(data.customerCount)} {data.customerCount === 1 ? "cliente" : "clientes"} con todo su historial, sus sucursales, escáneres y equipo. Si solo quieres
+                detenerlo un tiempo, mejor páusalo.
+              </p>
+              <div className="ll-row">
+                <Button variant="danger" size="sm" onClick={() => setDeleting(true)}>
+                  <Icon name="trash" size={16} /> Eliminar negocio
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
       {status && (
         <StatusConfirm businessId={business.id} name={business.name} status={status} onClose={() => setStatus(null)} />
       )}
+      {deleting && <DeleteConfirm data={data} onClose={() => setDeleting(false)} />}
     </div>
+  )
+}
+
+function DeleteConfirm({ data, onClose }: { data: AdminBundle; onClose: () => void }) {
+  const { business, customerCount, branches, devices, team } = data
+  const [typed, setTyped] = useState("")
+  const { run, pending, error } = useAction(api.adminDeleteBusiness)
+  const toast = useToast()
+  const plain = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+  const matches = plain(typed) === plain(business.name)
+  const plural = (n: number, one: string, many: string) => `${int(n)} ${n === 1 ? one : many}`
+  return (
+    <Confirm
+      title={`¿Eliminar ${business.name}?`}
+      confirmLabel="Eliminar para siempre"
+      tone="danger"
+      pending={pending}
+      error={error}
+      disabled={!matches}
+      onClose={onClose}
+      onConfirm={async () => {
+        const r = await run(business.id, typed)
+        if (r.ok) {
+          toast(`Se eliminó ${business.name}.`)
+          navigate("/admin/negocios")
+        }
+      }}
+    >
+      <div className="ll-stack">
+        <p>Esto no se puede deshacer. Se borran:</p>
+        <ul className="ll-bullets">
+          <li>{customerCount ? `${plural(customerCount, "cliente", "clientes")} con sus puntos, sellos, recompensas e historial.` : "Su tarjeta y reglas (aún no tiene clientes)."}</li>
+          <li>
+            {plural(branches.length, "sucursal", "sucursales")}
+            {devices.length ? ` y ${plural(devices.length, "escáner", "escáneres")}, que quedan desvinculados` : ""}.
+          </li>
+          {team.length > 0 && <li>{team.length === 1 ? "1 persona del equipo: ya no podrá entrar." : `${int(team.length)} personas del equipo: ya no podrán entrar.`}</li>}
+          <li>Su tarjeta: en Google Wallet aparece como vencida y en iPhone deja de actualizarse.</li>
+        </ul>
+        {customerCount > 0 && <p className="ll-hint">Si el dueño quiere su lista de clientes, entra a su cuenta y exporta el CSV antes de eliminar.</p>}
+        <Field label={`Escribe «${business.name}» para confirmar`} value={typed} autoComplete="off" data-autofocus onChange={(e) => setTyped(e.target.value)} />
+      </div>
+    </Confirm>
   )
 }
 

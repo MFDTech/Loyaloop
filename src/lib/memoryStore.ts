@@ -64,6 +64,19 @@ export function createMemoryStore(io: { load(): DB; save(db: DB): void }): Store
     async audit(query) {
       return db().audit.filter((e) => !query.businessId || e.businessId === query.businessId).slice(0, query.limit)
     },
+    async deleteBusiness(id) {
+      const d = structuredClone(db())
+      const team = new Set(d.users.filter((u) => u.businessId === id).map((u) => u.id))
+      for (const key of Object.keys(d) as (keyof DB)[]) {
+        const list = d[key]
+        // Leads and prospects are LoyaLoop's own sales records.
+        if (!Array.isArray(list) || key === "leads" || key === "prospects") continue
+        ;(d as unknown as Record<string, unknown>)[key] = (list as { id?: string; businessId?: string }[]).filter((row) => (key === "businesses" ? row.id !== id : row.businessId !== id))
+      }
+      d.resets = d.resets.filter((r) => !team.has(r.userId))
+      delete d.maintenance[id]
+      io.save(d)
+    },
     async businessStats(since) {
       const d = db()
       return d.businesses.map((b) => ({

@@ -388,6 +388,52 @@ for (const [label, make] of backends) {
         await api.adminUpdateBusiness(id, { status: "active" })
         expect((await api.registration(bundle.branches[0].code)).card.businessName).toBe("Barbería Norte")
       })
+
+      it("deletes a business with everything in it and leaves the others untouched", async () => {
+        await as("dueno@laesquina.test")
+        await api.pairDevice((await api.createPairingCode("rg_esq_roma")).code, "Tablet")
+        await as("dueno@affair.test")
+        const affair = (await api.customers()).length
+        await admin()
+        const esquina = (await api.adminBundle("b_esquina")).customerCount
+        expect(esquina).toBeGreaterThan(0)
+        await expect(api.adminDeleteBusiness("b_demo", "LoyaLoop")).rejects.toThrow(/demostración/)
+        await expect(api.adminDeleteBusiness("b_esquina", "La Esquina")).rejects.toThrow(/«Café La Esquina»/)
+        await api.impersonate("b_esquina")
+        expect(await api.adminDeleteBusiness("b_esquina", "  café la  esquina ")).toEqual({ customers: esquina })
+        // The admin was inside that account: back to the admin panel.
+        expect((await api.me())!.impersonating).toBe(false)
+        expect((await api.adminBusinesses()).some((b) => b.id === "b_esquina")).toBe(false)
+        expect((await api.adminAudit())[0]).toMatchObject({ action: "Eliminó un negocio", detail: `Café La Esquina, con ${esquina} clientes` })
+        await expect(api.adminBundle("b_esquina")).rejects.toThrow(/no existe/)
+        // Its scanner unpairs, its registration link and its team stop working.
+        await expect(api.kiosk()).rejects.toThrow(/vinculado/)
+        await expect(api.registration("ESQR4M")).rejects.toThrow()
+        await expect(as("dueno@laesquina.test")).rejects.toThrow()
+        // Affair keeps everything.
+        await as("dueno@affair.test")
+        expect((await api.customers()).length).toBe(affair)
+        useAffairTablet()
+        expect((await api.kiosk()).businessId).toBe("b_affair")
+      })
+
+      it("unlinks the prospect of a deleted business", async () => {
+        await admin()
+        const p = await api.saveProspect({ name: "Barre Sur", sector: "Barre" })
+        const { businessId: _b, ...program } = defaultProgram("x")
+        const input = {
+          name: "Barre Sur", sector: "Estudio de pilates o barre", contactName: "Eva", email: "eva@barresur.test", phone: "", status: "trial" as const, plan: "pro" as const,
+          branches: [{ name: "Centro", address: "" }], program, rewards: [],
+          brand: { color: "#1F6F5C" }, discreet: false, neutralName: "", locationAlerts: false, ownerName: "Eva", ownerEmail: "eva@barresur.test",
+        }
+        const { id } = await api.createBusiness({ ...input, prospectId: p.id })
+        await api.adminDeleteBusiness(id, "Barre Sur")
+        const after = (await api.prospects()).find((x) => x.id === p.id)!
+        expect(after.businessId).toBeUndefined()
+        expect(after.log[0].text).toMatch(/Se eliminó su cuenta/)
+        // The owner's email is free again: the business can be created anew.
+        expect((await api.createBusiness(input)).id).not.toBe(id)
+      })
     })
 
     describe("automatic monthly charge", () => {
