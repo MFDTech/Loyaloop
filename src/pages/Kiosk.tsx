@@ -19,7 +19,10 @@ export default function Kiosk({ code = "" }: { code?: string }) {
   const info = useAsync(() => (api.deviceToken() ? api.kiosk() : Promise.resolve(null)))
   const [keep, setKeep] = useState(false)
   const pairingCode = /^\d{6}$/.test(code) ? code : ""
-  const unpaired = !api.deviceToken() || /vinculado/.test(info.error)
+  const [repair, setRepair] = useState(false)
+  // A scanner that cannot work (unpaired, or its business is closed) can always be paired again,
+  // from a new register link or with the button below.
+  const unpaired = !api.deviceToken() || /vinculado/.test(info.error) || repair || (!!pairingCode && !!info.error)
   if (unpaired) return <Pairing initialCode={pairingCode} />
   // Opened with a new register's link on a device that is already a scanner.
   if (pairingCode && !keep && info.data) return <SwitchRegister info={info.data} code={pairingCode} onKeep={() => (setKeep(true), navigate("/caja", { replace: true }))} />
@@ -33,9 +36,14 @@ export default function Kiosk({ code = "" }: { code?: string }) {
             </span>
             <h1>El escáner no está disponible</h1>
             <p className="lead">{info.error}</p>
-            <Button size="lg" onClick={info.reload}>
-              Reintentar
-            </Button>
+            <div className="ll-row" style={{ justifyContent: "center" }}>
+              <Button size="lg" onClick={info.reload}>
+                Reintentar
+              </Button>
+              <Button size="lg" variant="secondary" onClick={() => (api.forgetDevice(), setRepair(true))}>
+                Vincular de nuevo
+              </Button>
+            </div>
           </div>
         </div>
       </div>
