@@ -108,6 +108,8 @@ export interface Register {
   businessId: string
   branchId: string
   name: string
+  /** Mercado Pago Point terminal that charges at this register. */
+  terminalId?: string
 }
 
 export interface Device {

@@ -14,6 +14,11 @@ export interface Config {
   trustProxy: boolean
   secureCookies: boolean
   mercadoPagoWebhookSecret: string
+  /** LoyaLoop's Mercado Pago application, for «Conectar con Mercado Pago» (OAuth). */
+  mercadoPagoClientId: string
+  mercadoPagoClientSecret: string
+  /** 64 hex characters: encrypts the businesses' Mercado Pago tokens and signs connect links. */
+  integrationsKey: string
   /** LoyaLoop's own Mercado Pago account, to charge businesses every month (subscriptions). */
   billingAccessToken: string
   billingWebhookSecret: string
@@ -59,6 +64,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: flag(env.TRUST_PROXY, true),
     secureCookies: flag(env.SECURE_COOKIES, publicUrl.startsWith("https://")),
     mercadoPagoWebhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET || "",
+    mercadoPagoClientId: env.MERCADOPAGO_CLIENT_ID || "",
+    mercadoPagoClientSecret: env.MERCADOPAGO_CLIENT_SECRET || "",
+    integrationsKey: env.INTEGRATIONS_KEY || "",
     billingAccessToken: env.BILLING_MP_ACCESS_TOKEN || "",
     billingWebhookSecret: env.BILLING_MP_WEBHOOK_SECRET || "",
     googleWalletIssuerId: env.GOOGLE_WALLET_ISSUER_ID || "",

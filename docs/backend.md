@@ -61,7 +61,7 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 | Correo (invitaciones, contraseñas) | **Programado** con Resend. Falta: verificar `loyaloop.com.mx` en Resend y poner `RESEND_API_KEY` | `.env` |
 | Apple Wallet | **Programado** (`server/src/wallet/apple.ts`). Falta: que Apple apruebe la cuenta de desarrollador y crear el certificado, ver abajo | `.env` y `secrets/` |
 | Google Wallet | **Programado** (`server/src/wallet/`). Falta: ID de emisor y llave de la cuenta de servicio, ver abajo | `.env` y `secrets/` |
-| Mercado Pago Point | Credenciales del piloto. El webhook ya valida la firma y guarda cada aviso en `webhook_events`; falta consultar el pago con el token del negocio, ligar cada terminal Point a una caja de LoyaLoop y llamar a `recordPayment` | `server/src/mercadopago.ts` |
+| Mercado Pago Point | **Programado** (`server/src/mercadopagoPoint.ts`). Falta: `INTEGRATIONS_KEY`, la aplicación de LoyaLoop en Mercado Pago y un cobro de prueba en Affair, ver abajo | `.env` |
 
 Mientras no haya SMS ni correo, el servidor debe correr con `PREVIEW=true`: el código de verificación y los enlaces aparecen en pantalla.
 
@@ -118,6 +118,32 @@ Configurarlo:
 5. El registro del servidor debe decir `[cobro] Pago automático con Mercado Pago activo`.
 
 Para probar con dinero ficticio usa las credenciales de prueba y dos **cuentas de prueba** (vendedor y comprador) de Mercado Pago; el correo que el dueño escribe debe ser el de la cuenta con la que entra a pagar.
+
+## Mercado Pago Point (cobros de las terminales)
+
+Cada negocio conecta **su** cuenta de Mercado Pago en el admin, pestaña **Cobro** de su ficha:
+
+- **Enlace para el dueño (recomendado):** se copia y se le manda; entra con su cuenta de Mercado Pago, autoriza a LoyaLoop y queda conectado. No copia claves.
+- **Access Token:** si el negocio ya tiene su propia aplicación en Mercado Pago Developers, se pega su Access Token de producción (`APP_USR-…`).
+
+Las claves se guardan cifradas (tabla `mp_accounts`) y nunca llegan al navegador. Cada 10 segundos el servidor busca los pagos recientes de cada cuenta (`/v1/payments/search`), así que también ve los cobros que el cajero teclea en la terminal. Cada pago aprobado va a la caja de su terminal (se asigna en la misma pestaña; con una sola caja no hace falta) y se junta con el escaneo como cualquier cobro (`recordPayment`). La lista **Últimos cobros leídos** muestra qué pasó con cada uno.
+
+Una vez:
+
+1. Llave de cifrado (no la cambies después; si se pierde, hay que volver a conectar las cuentas):
+   ```
+   cd ~/loyaloop && echo "INTEGRATIONS_KEY=$(openssl rand -hex 32)" >> .env
+   ```
+2. Para el enlace del dueño: en [Mercado Pago Developers](https://www.mercadopago.com.mx/developers/panel/app) crea la aplicación **LoyaLoop** (producto «Pagos presenciales»), con URL de redireccionamiento `https://loyaloop.com.mx/api/integrations/mercadopago/callback`. Copia su *Client ID* y *Client Secret* a `MERCADOPAGO_CLIENT_ID` y `MERCADOPAGO_CLIENT_SECRET`.
+3. Opcional, para leer cada cobro al instante en lugar de cada 10 segundos: en esa aplicación, **Webhooks** → URL `https://loyaloop.com.mx/api/webhooks/mercadopago`, evento **Pagos**, y copia la firma secreta a `MERCADOPAGO_WEBHOOK_SECRET`.
+4. `docker compose up -d --build`. El registro dice `[mercadopago] Point listo`.
+
+Para escribir las claves sin que se vean en pantalla:
+```
+read -rsp "Client Secret: " v && echo "MERCADOPAGO_CLIENT_SECRET=$v" >> .env && unset v
+```
+
+Primera prueba: conecta la cuenta, cobra $10 en la terminal y recarga la pestaña Cobro: el pago aparece en «Últimos cobros leídos». Luego escanea una tarjeta y cobra: debe decir «Sumó a …».
 
 ## Apple Wallet
 

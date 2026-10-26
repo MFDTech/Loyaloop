@@ -11,6 +11,7 @@ import { hashPassword, verifyPassword } from "./passwords"
 import { LIMITS, RateLimiter } from "./rateLimit"
 import { SESSION_COOKIE, SESSION_DAYS, createSession, deleteSession, deleteUserSessions, findSession, updateSession } from "./sessions"
 import { mercadoPagoWebhook } from "./mercadopago"
+import type { MercadoPagoAccounts } from "./mercadopagoPoint"
 import { billingWebhook } from "./billing"
 import { appleRoutes } from "./wallet/appleRoutes"
 import type { WalletService } from "./wallet"
@@ -55,9 +56,11 @@ export interface AppDeps {
   limiter?: RateLimiter
   wallets?: WalletService
   subscriptions?: Subscriptions
+  /** Businesses' Mercado Pago accounts (Point terminals). */
+  mercadoPago?: MercadoPagoAccounts
 }
 
-export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets, subscriptions }: AppDeps) {
+export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets, subscriptions, mercadoPago }: AppDeps) {
   const app = new Hono()
 
   app.use("*", async (c, next) => {
@@ -142,6 +145,7 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       messenger,
       wallets,
       subscriptions,
+      paymentAccounts: mercadoPago,
     }
 
     const service = createService(store, ctx)
@@ -174,6 +178,10 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
     return c.body(Buffer.from(match[2], "base64"), 200, { "content-type": match[1], "cache-control": "public, max-age=3600" })
   })
 
+  // Mercado Pago Point: notifications to LoyaLoop's application and the owner's «Conectar» link.
+  app.post("/api/webhooks/mercadopago", (c) => (mercadoPago ? mercadoPago.notification(c) : c.json({ ok: true })))
+  app.get("/api/integrations/mercadopago/start", (c) => (mercadoPago ? mercadoPago.oauthStart(c) : c.notFound()))
+  app.get("/api/integrations/mercadopago/callback", (c) => (mercadoPago ? mercadoPago.oauthCallback(c) : c.notFound()))
   app.post("/api/webhooks/mercadopago/:businessId", (c) => mercadoPagoWebhook(c, { pool, config }))
 
   // Monthly charge: Mercado Pago notifications and the owner's way back from its checkout.

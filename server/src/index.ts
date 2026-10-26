@@ -11,6 +11,7 @@ import { createService } from "../../src/lib/service"
 import { purgeExpiredSessions } from "./sessions"
 import { createWallets } from "./wallet"
 import { mercadoPagoSubscriptions } from "./billing"
+import { createMercadoPagoAccounts } from "./mercadopagoPoint"
 import { AppleWallet, apnsPusher, loadAppleCredentials } from "./wallet/apple"
 import { GoogleWallet, loadServiceAccount } from "./wallet/google"
 
@@ -60,7 +61,16 @@ else console.warn("[aviso] Pago automático sin configurar (BILLING_MP_ACCESS_TO
 if (subscriptions && !config.billingWebhookSecret) console.warn("[aviso] Falta BILLING_MP_WEBHOOK_SECRET: los cobros se leen cada 12 horas y al volver de Mercado Pago.")
 
 const store = createPgStore(pool)
-const app = createApp({ pool, store, config, messenger, wallets, subscriptions })
+// Reads the payments of the businesses' Point terminals (recorded by the system service below).
+const mercadoPago = createMercadoPagoAccounts({
+  pool,
+  config,
+  record: (input) => system.recordPayment(input),
+  connected: (businessId, how) => system.integrationConnected(businessId, "mercadopago", how),
+})
+if (mercadoPago.problem) console.warn(`[aviso] Mercado Pago Point: ${mercadoPago.problem}`)
+else console.log(`[mercadopago] Point listo${mercadoPago.oauth ? " (con «Conectar con Mercado Pago»)" : " (pegando el Access Token; falta MERCADOPAGO_CLIENT_ID/SECRET para el enlace)"}`)
+const app = createApp({ pool, store, config, messenger, wallets, subscriptions, mercadoPago })
 
 // Server clock: daily rules (expirations, birthdays, «te extrañamos») and scheduled promotions.
 const system = createService(store, {
@@ -77,7 +87,9 @@ const system = createService(store, {
   messenger,
   wallets,
   subscriptions,
+  paymentAccounts: mercadoPago,
 })
+const stopMercadoPago = mercadoPago.problem ? () => undefined : mercadoPago.start()
 let ticking = false
 const clock = setInterval(async () => {
   if (ticking) return
@@ -100,6 +112,7 @@ async function shutdown(signal: string) {
   clearInterval(timer)
   clearInterval(clock)
   stopWallets()
+  stopMercadoPago()
   server.close()
   await pool.end().catch(() => undefined)
   process.exit(0)

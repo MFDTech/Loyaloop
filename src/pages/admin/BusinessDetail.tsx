@@ -4,7 +4,7 @@ import { useAction, useAsync } from "../../lib/hooks"
 import { PREVIEW } from "../../lib/preview"
 import { absoluteLink, href, navigate } from "../../lib/router"
 import type { AuditEntry, BusinessStatus, Provider } from "../../lib/types"
-import { dateTime, formatPhone, int, isEmail, money, roleLabel } from "../../lib/util"
+import { dateTime, formatPhone, int, isEmail, money, relative, roleLabel } from "../../lib/util"
 import { PassPreview, sampleHolder } from "../../components/Pass"
 import { Badge, Button, Card, Confirm, CopyButton, Empty, ErrorState, Field, Icon, Loading, Notice, PageHeader, SelectField, Tabs, useToast } from "../../components/ui"
 import { statusLabel, statusTone } from "./Businesses"
@@ -417,6 +417,243 @@ const PROVIDERS: { id: Provider; name: string; detail: string }[] = [
 ]
 
 function PaymentsTab({ data }: { data: AdminBundle }) {
+  if (!PREVIEW)
+    return (
+      <div className="ll-stack">
+        <MercadoPagoCard businessId={data.business.id} />
+        <Card title="Clip" description="Para leer los cobros de las terminales Clip, Clip tiene que dar acceso a LoyaLoop como integrador.">
+          <Badge>Próximamente</Badge>
+        </Card>
+      </div>
+    )
+  return <PreviewPayments data={data} />
+}
+
+const EVENT_TONE = { processed: "success", ignored: "neutral", error: "danger", received: "neutral" } as const
+const shortTerminal = (id: string) => id.split("__").pop() || id
+
+function MercadoPagoCard({ businessId }: { businessId: string }) {
+  const mp = useAsync(() => api.adminMercadoPago(businessId), [businessId])
+  const connect = useAction(api.adminConnectMercadoPago)
+  const disconnect = useAction(api.adminDisconnectMercadoPago)
+  const assign = useAction(api.adminAssignTerminal)
+  const [token, setToken] = useState("")
+  const [confirm, setConfirm] = useState(false)
+  const toast = useToast()
+  if (mp.error) return <ErrorState message={mp.error} retry={mp.reload} />
+  if (!mp.data) return <Loading rows={3} />
+  const m = mp.data
+  const assigned = m.registers.filter((r) => r.terminalId).length
+  return (
+    <>
+      <Card
+        title="Mercado Pago Point"
+        description="Cada cobro de la terminal llega solo a LoyaLoop y se junta con el escaneo del cliente en esa caja."
+        actions={
+          m.connected && (
+            <Button variant="secondary" size="sm" onClick={() => setConfirm(true)}>
+              Desconectar
+            </Button>
+          )
+        }
+      >
+        <div className="ll-stack">
+          <div className="ll-row">
+            <Badge tone={m.connected ? (m.lastError ? "danger" : "success") : "neutral"}>{m.connected ? (m.lastError ? "Con error" : "Conectado") : "Sin conectar"}</Badge>
+            {m.connected && (
+              <span className="ll-hint">
+                {m.account} · {m.method === "oauth" ? "autorizado por el dueño" : "con Access Token"}
+                {m.lastSyncAt ? ` · revisado ${relative(m.lastSyncAt)}` : ""}
+              </span>
+            )}
+          </div>
+          {m.problem && <Notice tone="warning">{m.problem}</Notice>}
+          {m.lastError && <p className="ll-field-error">{m.lastError}</p>}
+          {!m.connected && !m.problem && (
+            <>
+              {m.link ? (
+                <div className="ll-stack">
+                  <p>
+                    <b>Opción recomendada:</b> manda este enlace al dueño por WhatsApp. Entra con su cuenta de Mercado Pago, autoriza a LoyaLoop y queda conectado; no tiene que copiar ninguna clave.
+                  </p>
+                  <div className="ll-code-box">
+                    <code>{m.link}</code>
+                    <CopyButton text={m.link} label="Copiar enlace" />
+                  </div>
+                  <p className="ll-hint">El enlace dura 7 días. Cuando el dueño termine, recarga esta página.</p>
+                </div>
+              ) : (
+                <Notice tone="info">El enlace «Conectar con Mercado Pago» se activa cuando el servidor tenga la aplicación de LoyaLoop (MERCADOPAGO_CLIENT_ID y MERCADOPAGO_CLIENT_SECRET). Mientras, pega el Access Token.</Notice>
+              )}
+              <form
+                className="ll-stack"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const r = await connect.run(businessId, token)
+                  if (r.ok) {
+                    setToken("")
+                    toast(`Mercado Pago conectado (${r.value.account}).`)
+                    mp.reload()
+                  }
+                }}
+              >
+                <Field
+                  label={m.link ? "O pega su Access Token" : "Access Token del negocio"}
+                  type="password"
+                  autoComplete="off"
+                  placeholder="APP_USR-…"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  error={connect.error}
+                  hint="En Mercado Pago Developers, Tus integraciones › la aplicación del negocio › Credenciales de producción. Se guarda cifrado."
+                />
+                <div>
+                  <Button type="submit" size="sm" loading={connect.pending} disabled={!token.trim()}>
+                    Conectar
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {m.connected && (
+        <Card
+          title="Terminales"
+          description={
+            m.registers.length === 1
+              ? "Con una sola caja, todos los cobros de esta cuenta van a esa caja. Asignar la terminal es opcional."
+              : "Elige en qué caja está cada terminal: así cada cobro se junta con el escaneo de su caja."
+          }
+          padded={false}
+        >
+          {m.terminalsError ? (
+            <div style={{ padding: 22 }}>
+              <Notice tone="error">{m.terminalsError}</Notice>
+            </div>
+          ) : !m.terminals.length ? (
+            <div style={{ padding: 22 }}>
+              <p className="ll-hint">Esta cuenta no tiene terminales Point registradas. Si la terminal es nueva, vincúlala primero en la app de Mercado Pago.</p>
+            </div>
+          ) : (
+            <div className="ll-table-wrap">
+              <table className="ll-table is-responsive">
+                <thead>
+                  <tr>
+                    <th>Terminal</th>
+                    <th>Modo</th>
+                    <th>Caja de LoyaLoop</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m.terminals.map((t) => (
+                    <tr key={t.id}>
+                      <td className="ll-td-main">
+                        <span className="ll-cell-main">{shortTerminal(t.id)}</span>
+                      </td>
+                      <td data-label="Modo">{t.mode === "PDV" ? "Integrado (PDV)" : t.mode === "STANDALONE" ? "Independiente" : t.mode || "—"}</td>
+                      <td data-label="Caja">
+                        <select
+                          aria-label={`Caja de la terminal ${shortTerminal(t.id)}`}
+                          value={t.registerId || ""}
+                          disabled={assign.pending}
+                          onChange={async (e) => {
+                            const registerId = e.target.value
+                            const previous = t.registerId
+                            const r = registerId ? await assign.run(businessId, registerId, t.id) : previous ? await assign.run(businessId, previous, "") : { ok: true as const, value: undefined }
+                            if (r.ok) {
+                              toast(registerId ? "Terminal asignada." : "Terminal sin caja.")
+                              mp.reload()
+                            }
+                          }}
+                        >
+                          <option value="">Sin asignar</option>
+                          {m.registers.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.branch ? `${r.branch} · ${r.name}` : r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {assign.error && (
+            <div style={{ padding: "0 22px 16px" }}>
+              <p className="ll-field-error">{assign.error}</p>
+            </div>
+          )}
+          {m.registers.length > 1 && m.terminals.length > 0 && assigned < m.registers.length && (
+            <div style={{ padding: "0 22px 16px" }}>
+              <p className="ll-hint">
+                {assigned} de {m.registers.length} cajas tienen terminal.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {(m.connected || m.events.length > 0) && (
+        <Card title="Últimos cobros leídos" description="Cada cobro aprobado de la cuenta y qué hizo LoyaLoop con él. Sirve para revisar la primera prueba." padded={false}>
+          {!m.events.length ? (
+            <div style={{ padding: 22 }}>
+              <p className="ll-hint">Todavía no llega ningún cobro. Haz uno de prueba en la terminal y recarga en unos segundos.</p>
+            </div>
+          ) : (
+            <ul className="ll-list" style={{ padding: "0 22px 8px" }}>
+              {m.events.map((e) => (
+                <li key={e.externalId} className="ll-list-item">
+                  <div>
+                    <strong>
+                      {money(e.amount)} · {dateTime(e.at)}
+                    </strong>
+                    <small>
+                      Pago {e.externalId}
+                      {e.detail ? ` · ${e.detail}` : ""}
+                    </small>
+                  </div>
+                  <Badge tone={EVENT_TONE[e.status]}>{e.status === "processed" ? "Leído" : e.status === "ignored" ? "Omitido" : e.status === "error" ? "Error" : "Leyendo"}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div style={{ padding: "0 22px 16px" }}>
+            <Button variant="secondary" size="sm" onClick={mp.reload}>
+              Recargar
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {confirm && (
+        <Confirm
+          title="¿Desconectar Mercado Pago?"
+          confirmLabel="Desconectar"
+          tone="danger"
+          pending={disconnect.pending}
+          error={disconnect.error}
+          onClose={() => setConfirm(false)}
+          onConfirm={async () => {
+            const r = await disconnect.run(businessId)
+            if (r.ok) {
+              toast("Mercado Pago desconectado.")
+              setConfirm(false)
+              mp.reload()
+            }
+          }}
+        >
+          Se borra la clave guardada y LoyaLoop deja de leer los cobros de sus terminales. Los puntos ya sumados se quedan.
+        </Confirm>
+      )}
+    </>
+  )
+}
+
+function PreviewPayments({ data }: { data: AdminBundle }) {
   const { run, pending, error } = useAction(api.adminSetIntegration)
   const [busy, setBusy] = useState<Provider | null>(null)
   const toast = useToast()

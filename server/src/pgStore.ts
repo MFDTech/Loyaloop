@@ -224,6 +224,7 @@ export function createPgStore(pool: Pool, now: () => number = Date.now): Store {
         await client.query("delete from apple_registrations where serial in (select apple_serial from wallet_passes where business_id = $1 and apple_serial is not null)", [id])
         await client.query("delete from wallet_passes where business_id = $1", [id])
         await client.query("delete from webhook_events where business_id = $1", [id])
+        await client.query("delete from mp_accounts where business_id = $1", [id])
         // Leads, prospects and reset links have no business; the rest is erased by business_id.
         for (const key of KEYS) if (TABLES[key].table !== "leads" && TABLES[key].table !== "prospects" && TABLES[key].table !== "resets") await client.query(`delete from ${TABLES[key].table} where business_id = $1`, [id])
         await client.query("delete from maintenance where business_id = $1", [id])

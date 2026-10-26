@@ -157,6 +157,46 @@ export interface Subscriptions {
   charge(id: string): Promise<SubscriptionCharge>
 }
 
+/** A payment from the provider as LoyaLoop read it, for the admin's log. */
+export interface ProviderEvent {
+  at: string
+  externalId: string
+  amount: number
+  status: "processed" | "ignored" | "error" | "received"
+  detail: string
+}
+
+/** Server only: each business's Mercado Pago account, its Point terminals and the payments read from it. */
+export interface PaymentAccounts {
+  /** «Conectar con Mercado Pago» needs LoyaLoop's own application (MERCADOPAGO_CLIENT_ID/SECRET). */
+  oauth: boolean
+  /** Why credentials cannot be stored (no INTEGRATIONS_KEY), if so. */
+  problem?: string
+  status(businessId: string): Promise<{ connected: boolean; method?: "oauth" | "token"; account?: string; lastSyncAt?: string; lastError?: string }>
+  connectWithToken(businessId: string, token: string): Promise<{ account: string }>
+  /** Link the owner opens to authorize LoyaLoop in Mercado Pago. */
+  connectLink(businessId: string): string
+  disconnect(businessId: string): Promise<void>
+  terminals(businessId: string): Promise<{ id: string; mode: string }[]>
+  events(businessId: string): Promise<ProviderEvent[]>
+}
+
+export interface MercadoPagoPanel {
+  available: boolean
+  oauth: boolean
+  problem?: string
+  connected: boolean
+  method?: "oauth" | "token"
+  account?: string
+  lastSyncAt?: string
+  lastError?: string
+  link?: string
+  terminals: { id: string; mode: string; registerId?: string }[]
+  terminalsError?: string
+  registers: { id: string; name: string; branch: string; terminalId?: string }[]
+  events: ProviderEvent[]
+}
+
 export interface Context {
   now(): number
   session(): Promise<Session | null>
@@ -176,6 +216,8 @@ export interface Context {
   wallets?: Wallets
   /** Charges businesses every month. Without it, LoyaLoop charges by hand. */
   subscriptions?: Subscriptions
+  /** Mercado Pago accounts of the businesses (server only). */
+  paymentAccounts?: PaymentAccounts
   online?(): boolean
 }
 
@@ -1399,6 +1441,100 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
+  function markIntegration(db: DB, businessId: string, provider: Provider, connected: boolean) {
+    const row = db.integrations.find((i) => i.businessId === businessId && i.provider === provider)
+    if (!row) throw new ApiError("Integración desconocida.")
+    if (connected) {
+      for (const other of db.integrations) if (other.businessId === businessId && other.provider !== provider && other.status === "connected") other.status = "not_connected"
+      row.connectedAt = iso()
+    }
+    row.status = connected ? "connected" : "not_connected"
+    row.lastError = undefined
+  }
+
+  function accounts(): PaymentAccounts {
+    if (!ctx.paymentAccounts) throw new ApiError("La conexión con Mercado Pago solo funciona en el servidor.", "forbidden")
+    return ctx.paymentAccounts
+  }
+
+  /** Cobro tab: Mercado Pago account, terminals and the last payments read. */
+  async function adminMercadoPago(businessId: string): Promise<MercadoPagoPanel> {
+    await asAdmin()
+    const db = await store.read(B(businessId))
+    if (!db.businesses.some((b) => b.id === businessId)) throw new ApiError("El negocio no existe.", "not_found")
+    const registers = db.registers
+      .filter((r) => r.businessId === businessId)
+      .map((r) => ({ id: r.id, name: r.name, branch: db.branches.find((b) => b.id === r.branchId)?.name || "", terminalId: r.terminalId }))
+    const pa = ctx.paymentAccounts
+    if (!pa) return { available: false, oauth: false, connected: false, terminals: [], registers, events: [] }
+    const status = await pa.status(businessId)
+    let terminals: MercadoPagoPanel["terminals"] = []
+    let terminalsError: string | undefined
+    if (status.connected) {
+      try {
+        terminals = (await pa.terminals(businessId)).map((t) => ({ ...t, registerId: registers.find((r) => r.terminalId === t.id)?.id }))
+      } catch (error) {
+        terminalsError = (error as Error).message
+      }
+    }
+    return {
+      available: true,
+      oauth: pa.oauth,
+      problem: pa.problem,
+      ...status,
+      link: pa.oauth && !pa.problem ? pa.connectLink(businessId) : undefined,
+      terminals,
+      terminalsError,
+      registers,
+      events: await pa.events(businessId),
+    }
+  }
+
+  async function adminConnectMercadoPago(businessId: string, token: string): Promise<{ account: string }> {
+    const a = await asAdmin()
+    const clean = String(token || "").trim()
+    if (!/^APP_USR-[\w-]{20,}$/.test(clean)) throw new ApiError("Pega el Access Token de producción: empieza con APP_USR-.")
+    const result = await accounts()
+      .connectWithToken(businessId, clean)
+      .catch((error: Error) => {
+        throw error instanceof ApiError ? error : new ApiError(error.message)
+      })
+    await integrationConnected(businessId, "mercadopago", `con Access Token (${result.account})`, a)
+    return result
+  }
+
+  async function adminDisconnectMercadoPago(businessId: string) {
+    const a = await asAdmin()
+    await accounts().disconnect(businessId)
+    await store.write(B(businessId), (db) => {
+      markIntegration(db, businessId, "mercadopago", false)
+      audit(db, a, businessId, "Desconectó Mercado Pago", "", now())
+    })
+  }
+
+  /** Which Point terminal charges at a register; one terminal per register. */
+  async function adminAssignTerminal(businessId: string, registerId: string, terminalId: string) {
+    const a = await asAdmin()
+    const id = text(terminalId, 120)
+    await store.write(B(businessId), (db) => {
+      const register = db.registers.find((r) => r.id === registerId && r.businessId === businessId)
+      if (!register) throw new ApiError("La caja ya no existe.")
+      for (const r of db.registers) if (r.businessId === businessId && id && r.terminalId === id) delete r.terminalId
+      if (id) register.terminalId = id
+      else delete register.terminalId
+      audit(db, a, businessId, id ? "Asignó una terminal" : "Quitó la terminal de una caja", id ? `${id} a ${register.name}` : register.name, now())
+    })
+  }
+
+  /** Called when an account connects (admin with a token, or the owner through Mercado Pago). */
+  async function integrationConnected(businessId: string, provider: Provider, how: string, actor?: Actor) {
+    await store.write(B(businessId), (db) => {
+      markIntegration(db, businessId, provider, true)
+      const who: Actor = actor ?? { user: { id: "system", name: "Mercado Pago" } as User, role: "admin", impersonated: false }
+      audit(db, who, businessId, `Conectó ${provider === "mercadopago" ? "Mercado Pago" : "Clip"}`, how, now())
+    })
+  }
+
   async function adminMetrics(): Promise<GlobalMetrics> {
     await asAdmin()
     const db = await store.read("global")
@@ -2354,6 +2490,11 @@ export function createService(store: Store, ctx: Context) {
     adminSaveProgram,
     adminUpdateBusiness,
     adminDeleteBusiness,
+    adminMercadoPago,
+    adminConnectMercadoPago,
+    adminDisconnectMercadoPago,
+    adminAssignTerminal,
+    integrationConnected,
     adminSetIntegration,
     adminMetrics,
     adminAudit,
@@ -2404,7 +2545,7 @@ export const PUBLIC_METHODS = [
   "bundle", "customers", "customer", "adjustBalance", "exportCustomersCsv", "activity", "refundPurchase", "reviewQueue", "resolveReview",
   "saveReward", "deleteReward", "saveBranch", "deleteBranch", "saveRegister", "deleteRegister", "createPairingCode", "unpairDevice",
   "team", "inviteMember", "updateMember", "updateBusinessContact", "notices", "saveNotices", "campaigns", "campaignAudience", "createCampaign", "cancelCampaign", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminDeleteBusiness", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "prospects", "saveProspect", "addProspectNote", "deleteProspect", "simulatePayment",
+  "adminBusinesses", "adminBundle", "createBusiness", "adminSaveProgram", "adminUpdateBusiness", "adminDeleteBusiness", "adminMercadoPago", "adminConnectMercadoPago", "adminDisconnectMercadoPago", "adminAssignTerminal", "adminSetIntegration", "adminMetrics", "adminAudit", "leads", "markLead", "prospects", "saveProspect", "addProspectNote", "deleteProspect", "simulatePayment",
   "billing", "startSubscription", "refreshBilling", "cancelSubscription",
   "registration", "privacyNotice", "signupBusiness", "saveCard", "demoCard", "demoVisit", "sendCode", "completeRegistration", "recoverCard", "createCard", "sendCardLink", "openCardLink", "submitLead",
   "pairDevice", "kioskUnpair", "kiosk", "kioskScan", "kioskScanStatus", "kioskRedeem",
@@ -2415,5 +2556,5 @@ export type PublicMethod = (typeof PUBLIC_METHODS)[number]
 /** Calls that only read: the browser does not need to refresh other views after them. */
 export const READ_METHODS = new Set<string>([
   "me", "invitation", "bundle", "customers", "customer", "exportCustomersCsv", "activity", "reviewQueue", "team", "notices", "campaigns", "campaignAudience", "suspicious", "metrics",
-  "adminBusinesses", "adminBundle", "adminMetrics", "adminAudit", "leads", "prospects", "registration", "privacyNotice", "kiosk", "kioskScanStatus", "billing",
+  "adminBusinesses", "adminBundle", "adminMercadoPago", "adminMetrics", "adminAudit", "leads", "prospects", "registration", "privacyNotice", "kiosk", "kioskScanStatus", "billing",
 ])

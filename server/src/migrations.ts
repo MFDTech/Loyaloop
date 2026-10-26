@@ -267,4 +267,24 @@ create table prospects (
 create index prospects_at on prospects (at);
 `,
   },
+  {
+    id: "008_mercadopago_accounts",
+    sql: `
+-- Each business's Mercado Pago account, connected by the owner (OAuth) or with
+-- its Access Token. Tokens are encrypted with INTEGRATIONS_KEY and never reach the browser.
+create table mp_accounts (
+  business_id text primary key,
+  mp_user_id text not null,
+  nickname text not null default '',
+  method text not null,
+  access_token text not null,
+  refresh_token text,
+  expires_at timestamptz,
+  last_poll_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now()
+);
+create index mp_accounts_user on mp_accounts (mp_user_id);
+`,
+  },
 ]
