@@ -162,6 +162,7 @@ const config: Config = {
   mercadoPagoClientId: "",
   mercadoPagoClientSecret: "",
   integrationsKey: "",
+  alertEmail: "",
   billingAccessToken: "",
   billingWebhookSecret: "",
   googleWalletIssuerId: "",

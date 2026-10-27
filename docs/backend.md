@@ -53,6 +53,35 @@ Pruebas: `TEST_DATABASE_URL=postgresql://…/loyaloop_test pnpm test`. Sin esa v
 **Respaldos.** El servicio `backup` guarda un respaldo diario en `./backups` (se quedan los últimos 14) y el servicio `offsite` copia cada uno a Cloudflare R2 (se quedan 30 días allá). Ver «Respaldos fuera del servidor». Para restaurar:
 `docker compose exec -T db pg_restore -U loyaloop -d loyaloop --clean < backups/ARCHIVO.dump`
 
+## Seguridad
+
+Revisión del 27 de octubre de 2026 con la lista de 7 puntos (autorización, validación en el servidor, límites, dependencias, registros, secretos y respaldos):
+
+| Punto | Cómo está | Prueba |
+|---|---|---|
+| Autorización (IDOR) | Cada acción del panel trabaja solo dentro del negocio de la sesión: el servidor carga únicamente las filas de ese negocio (`business_id`) y cada búsqueda por id revisa el negocio. Las acciones de LoyaLoop piden rol de administrador | `tests/rules.test.ts` «refuses every other business's id» |
+| No confiar en el navegador | El servidor valida cada dato; las reglas de la tarjeta pasan por `cleanProgram` (solo sus campos), plan, precio, estado y roles nunca vienen del navegador, las imágenes se revisan | «keeps only the card's own fields from a hostile request» |
+| Límites | Límite general de 600 solicitudes por minuto por IP y límites propios para entrar, contraseñas, códigos, registro, enlaces, escáner, exportar, invitar y Mercado Pago (`server/src/rateLimit.ts`) | «limits password guessing» |
+| Dependencias | `pnpm-lock.yaml` en git, instalación con `--frozen-lockfile`, CI falla con vulnerabilidades altas (`pnpm audit`) y Dependabot semanal. Excepción: node-forge (firma de pases de Apple) no tiene arreglo y su aviso es sobre verificar firmas, que LoyaLoop no hace | CI |
+| Registros y alertas | Cada intento fallido de entrar, solicitud bloqueada, acción sin permiso y aviso de pago con firma falsa queda como una línea JSON en el registro; si se dispara (p. ej. 20 intentos fallidos en 5 minutos desde una IP) llega un correo a `ALERT_EMAIL` | `tests/security.test.ts` |
+| Secretos | Ninguna clave llega al navegador (solo `VITE_API_URL`, `VITE_PREVIEW`, `VITE_BILLING`) ni a git (`.env*` y `secrets/` ignorados); el historial completo se revisó sin hallazgos. Las claves de Mercado Pago de los negocios se guardan cifradas | — |
+| Respaldos | Respaldo diario en el VPS (14) y copia en Cloudflare R2 (30 días). Ensayo de restauración con `deploy/ensayo-restauracion.sh` | Ensayo hecho el 27 oct con un respaldo de pruebas |
+
+**Ver los eventos de seguridad:** `docker compose logs app --since 24h | grep '"event"'`
+
+**Ensayar una restauración** (una vez al mes, no toca la base real): `cd ~/loyaloop && sh deploy/ensayo-restauracion.sh`
+
+**Volver a la versión anterior** si un despliegue sale mal:
+```
+cd ~/loyaloop
+git log --oneline -5                 # elige el commit bueno
+git checkout <commit> && docker compose up -d --build
+# cuando esté arreglado, regresa a la rama: git checkout claude/backend && git pull && docker compose up -d --build
+```
+Las migraciones de la base solo agregan cosas, así que la versión anterior funciona con la base nueva.
+
+**Si una clave se filtra** (captura de pantalla, chat, commit): cámbiala en su servicio y en `.env`, y `docker compose up -d`. La contraseña de root del VPS se cambia con `passwd`; mejor aún, entra con llave SSH y apaga la contraseña.
+
 ## Lo que falta conectar
 
 | Pieza | Qué se necesita | Dónde va |

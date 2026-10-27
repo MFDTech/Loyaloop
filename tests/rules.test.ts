@@ -246,6 +246,46 @@ for (const [label, make] of backends) {
         expect(rows.every((c) => c.businessId === "b_esquina")).toBe(true)
       })
 
+      it("refuses every other business's id (IDOR) and changes nothing there", async () => {
+        // Ids that belong to La Esquina, used from Affair's owner account.
+        await as("dueno@laesquina.test")
+        const theirs = await api.customers()
+        const customer = theirs[0]
+        const tx = (await api.activity({})).find((t) => t.kind === "visit" || t.kind === "purchase")
+        const campaign = await api.createCampaign({ message: "Promo de La Esquina", audience: { kind: "all" }, sendAt: new Date(t + 2 * 86_400_000).toISOString() })
+        const before = JSON.stringify(await api.bundle())
+
+        await as("dueno@affair.test")
+        const attempts: [string, () => Promise<unknown>][] = [
+          ["customer", () => api.customer(customer.id)],
+          ["adjustBalance", () => api.adjustBalance(customer.id, { points: 500, stamps: 5 }, "prueba")],
+          ["refundPurchase", () => api.refundPurchase(tx?.id || "t_x", "prueba")],
+          ["resolveReview", () => api.resolveReview("p_x", null)],
+          ["saveReward", () => api.saveReward({ id: "rw_esq_cafe", name: "Gratis todo", description: "", cost: 0, active: true })],
+          ["deleteReward", () => api.deleteReward("rw_esq_cafe")],
+          ["saveBranch", () => api.saveBranch({ id: "br_esq_roma", name: "Mía", address: "" })],
+          ["deleteBranch", () => api.deleteBranch("br_esq_condesa")],
+          ["saveRegister", () => api.saveRegister({ id: "rg_esq_roma", name: "Mía", branchId: "br_affair" })],
+          ["saveRegister into their branch", () => api.saveRegister({ name: "Intrusa", branchId: "br_esq_roma" })],
+          ["deleteRegister", () => api.deleteRegister("rg_esq_condesa")],
+          ["createPairingCode", () => api.createPairingCode("rg_esq_roma")],
+          ["updateMember", () => api.updateMember("u_esq_owner", { role: "cashier", phone: "", excluded: false, active: false })],
+          ["cancelCampaign", () => api.cancelCampaign(campaign.id)],
+        ]
+        for (const [name, attempt] of attempts) {
+          const result = await attempt().then(
+            () => "allowed",
+            () => "refused",
+          )
+          expect(`${name}: ${result}`).toBe(`${name}: refused`)
+        }
+        await as("dueno@laesquina.test")
+        expect(JSON.stringify(await api.bundle())).toBe(before)
+        expect((await api.customer(customer.id)).customer.points).toBe(customer.points)
+        expect((await api.campaigns()).find((c) => c.id === campaign.id)!.status).toBe("scheduled")
+        expect((await api.team()).find((u) => u.id === "u_esq_owner")!.active).toBe(true)
+      })
+
       it("lets the admin enter a business and records it", async () => {
         await admin()
         await api.impersonate("b_esquina")
@@ -318,6 +358,23 @@ for (const [label, make] of backends) {
         await as("dueno@affair.test")
         const affair = await api.bundle()
         await expect(api.saveCard({ program: affair.program, brand: { brand: affair.business.brand, discreet: false, neutralName: "" } })).rejects.toThrow(/LoyaLoop/)
+      })
+
+      it("keeps only the card's own fields from a hostile request", async () => {
+        await api.logout()
+        const me = await api.signupBusiness(signup)
+        const { program, business } = await api.bundle()
+        const hostile = { ...program, businessId: "b_affair", plan: "pro", status: "active", monthlyPrice: 1, messages: { welcome: "{x}" }, missYouDays: 1, junk: "x".repeat(1000), tiers: [{ id: "t", name: "Oro", threshold: 0, multiplier: 50 }] }
+        await api.saveCard({ program: hostile as never, brand: { brand: { ...business.brand, logo: "javascript:alert(1)" }, discreet: false, neutralName: "" } }).catch((e) => expect(e.message).toMatch(/imagen/))
+        await api.saveCard({ program: hostile as never, brand: { brand: business.brand, discreet: false, neutralName: "" } })
+        const after = await api.bundle()
+        expect(after.program).not.toHaveProperty("junk")
+        expect(after.program).not.toHaveProperty("plan")
+        expect(after.program).toMatchObject({ businessId: me.business!.id, type: "stamps", tiers: [] })
+        expect(after.program.messages).toBeUndefined()
+        expect(after.business).toMatchObject({ plan: "starter", status: "pending" })
+        expect(after.business.monthlyPrice).toBeUndefined()
+        await expect(api.saveCard({ program: { ...program, stampGoal: "muchos" } as never, brand: { brand: business.brand, discreet: false, neutralName: "" } })).rejects.toThrow(/números|sellos/)
       })
 
       it("closes registration when a trial LoyaLoop gave ends, until it is activated", async () => {

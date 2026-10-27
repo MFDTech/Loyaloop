@@ -99,6 +99,7 @@ const config: Config = {
   mercadoPagoClientId: "1234567890",
   mercadoPagoClientSecret: "secreto-app",
   integrationsKey: KEY,
+  alertEmail: "",
   billingAccessToken: "",
   billingWebhookSecret: "",
   googleWalletIssuerId: "",

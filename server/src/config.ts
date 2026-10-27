@@ -19,6 +19,8 @@ export interface Config {
   mercadoPagoClientSecret: string
   /** 64 hex characters: encrypts the businesses' Mercado Pago tokens and signs connect links. */
   integrationsKey: string
+  /** Where security alerts go (spikes of failed logins, blocked requests...). */
+  alertEmail: string
   /** LoyaLoop's own Mercado Pago account, to charge businesses every month (subscriptions). */
   billingAccessToken: string
   billingWebhookSecret: string
@@ -67,6 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mercadoPagoClientId: env.MERCADOPAGO_CLIENT_ID || "",
     mercadoPagoClientSecret: env.MERCADOPAGO_CLIENT_SECRET || "",
     integrationsKey: env.INTEGRATIONS_KEY || "",
+    alertEmail: env.ALERT_EMAIL || "hola@loyaloop.com.mx",
     billingAccessToken: env.BILLING_MP_ACCESS_TOKEN || "",
     billingWebhookSecret: env.BILLING_MP_WEBHOOK_SECRET || "",
     googleWalletIssuerId: env.GOOGLE_WALLET_ISSUER_ID || "",

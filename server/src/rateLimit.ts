@@ -23,6 +23,9 @@ export class RateLimiter {
 
 const MIN = 60_000
 
+/** Any /api call, per IP: far above normal use (a scanner polls about once a second). */
+export const API_LIMIT: [number, number] = [600, MIN]
+
 /** Limits per method: [max calls, window] for the client IP, and optionally for the first argument (email, phone...). */
 export const LIMITS: Record<string, { ip: [number, number]; arg?: [number, number]; argIndex?: number }> = {
   login: { ip: [20, 15 * MIN], arg: [8, 15 * MIN], argIndex: 0 },
@@ -47,4 +50,9 @@ export const LIMITS: Record<string, { ip: [number, number]; arg?: [number, numbe
   submitLead: { ip: [5, 60 * MIN] },
   pairDevice: { ip: [10, 10 * MIN] },
   kioskScan: { ip: [240, MIN] },
+  kioskRedeem: { ip: [60, MIN] },
+  exportCustomersCsv: { ip: [10, 10 * MIN] },
+  inviteMember: { ip: [20, 60 * MIN] },
+  adminConnectMercadoPago: { ip: [10, 15 * MIN] },
+  adminDeleteBusiness: { ip: [10, 60 * MIN] },
 }

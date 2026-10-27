@@ -8,11 +8,12 @@ import type { Session } from "../../src/lib/types"
 import type { Config } from "./config"
 import type { Pool } from "./db"
 import { hashPassword, verifyPassword } from "./passwords"
-import { LIMITS, RateLimiter } from "./rateLimit"
+import { API_LIMIT, LIMITS, RateLimiter } from "./rateLimit"
 import { SESSION_COOKIE, SESSION_DAYS, createSession, deleteSession, deleteUserSessions, findSession, updateSession } from "./sessions"
 import { mercadoPagoWebhook } from "./mercadopago"
 import type { MercadoPagoAccounts } from "./mercadopagoPoint"
 import { billingWebhook } from "./billing"
+import { SecurityMonitor } from "./security"
 import { appleRoutes } from "./wallet/appleRoutes"
 import type { WalletService } from "./wallet"
 import type { Business } from "../../src/lib/types"
@@ -58,10 +59,13 @@ export interface AppDeps {
   subscriptions?: Subscriptions
   /** Businesses' Mercado Pago accounts (Point terminals). */
   mercadoPago?: MercadoPagoAccounts
+  /** Security log and spike alerts. */
+  security?: SecurityMonitor
 }
 
-export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets, subscriptions, mercadoPago }: AppDeps) {
+export function createApp({ pool, store, config, messenger, now = Date.now, limiter = new RateLimiter(), wallets, subscriptions, mercadoPago, security }: AppDeps) {
   const app = new Hono()
+  const monitor = security ?? new SecurityMonitor({ messenger, alertEmail: config.alertEmail })
 
   app.use("*", async (c, next) => {
     await next()
@@ -80,6 +84,17 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       return "unknown"
     }
   }
+
+  // Every API call counts toward one generous cap per IP; webhooks with a bad signature are logged.
+  app.use("/api/*", async (c, next) => {
+    const ip = clientIp(c)
+    if (!limiter.allow(`api:ip:${ip}`, ...API_LIMIT)) {
+      monitor.record("auth.rate_limited", { ip, route: c.req.path })
+      return c.json({ error: { message: "Demasiadas solicitudes. Espera un momento.", code: "rate_limited" } }, 429)
+    }
+    await next()
+    if (c.req.path.startsWith("/api/webhooks/") && c.res.status === 401) monitor.record("webhook.bad_signature", { ip, route: c.req.path })
+  })
 
   app.get("/api/health", async (c) => {
     try {
@@ -105,7 +120,10 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
       const ip = clientIp(c)
       const argKey = limit.argIndex !== undefined ? String(args[limit.argIndex] ?? "").toLowerCase().replace(/\s+/g, "") : ""
       const blocked = !limiter.allow(`${name}:ip:${ip}`, ...limit.ip) || (limit.arg && argKey && !limiter.allow(`${name}:arg:${argKey}`, ...limit.arg))
-      if (blocked) return c.json({ error: { message: "Demasiados intentos. Espera unos minutos e inténtalo otra vez.", code: "rate_limited" } }, 429)
+      if (blocked) {
+        monitor.record("auth.rate_limited", { ip, route: name })
+        return c.json({ error: { message: "Demasiados intentos. Espera unos minutos e inténtalo otra vez.", code: "rate_limited" } }, 429)
+      }
     }
 
     // Per-request context: session from the cookie, device from its header.
@@ -160,6 +178,8 @@ export function createApp({ pool, store, config, messenger, now = Date.now, limi
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === "unauthenticated" && token) deleteCookie(c, SESSION_COOKIE, { path: "/" })
+        if (name === "login" && error.code === "invalid_credentials") monitor.record("auth.failed_login", { ip: clientIp(c), email: String(args[0] ?? "").toLowerCase().slice(0, 120) })
+        if (error.code === "forbidden") monitor.record("authz.denied", { ip: clientIp(c), method: name, userId: (await ctx.session().catch(() => null))?.userId ?? null })
         return c.json({ error: { message: error.message, code: error.code } }, (STATUS[error.code] || 400) as 400)
       }
       console.error(`[rpc] ${name} failed`, error)

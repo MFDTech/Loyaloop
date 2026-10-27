@@ -28,6 +28,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Known high-severity vulnerabilities fail the build. node-forge (Apple pass signing) has no fix;
+      # its advisory is about verifying signatures, which LoyaLoop never does.
+      - run: pnpm audit --audit-level=high --ignore GHSA-86w9-cpqp-85rv
       - run: pnpm typecheck
       - run: pnpm test
       - run: VITE_API_URL=/api pnpm build

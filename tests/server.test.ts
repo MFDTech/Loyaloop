@@ -4,6 +4,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createSeed } from "../src/lib/seed"
 import { createApp } from "../server/src/app"
+import { SecurityMonitor } from "../server/src/security"
 import type { Config } from "../server/src/config"
 import { migrate } from "../server/src/db"
 import { hashPassword, verifyPassword } from "../server/src/passwords"
@@ -25,6 +26,7 @@ const config: Config = {
   mercadoPagoClientId: "",
   mercadoPagoClientSecret: "",
   integrationsKey: "",
+  alertEmail: "",
   billingAccessToken: "",
   billingWebhookSecret: "secreto-de-cobros",
   googleWalletIssuerId: "",
@@ -152,6 +154,20 @@ describe.skipIf(!TEST_DATABASE_URL)("server over HTTP", () => {
     for (let i = 0; i < 10; i++) statuses.push((await rpc("login", ["dueno@affair.test", "mala"])).status)
     expect(statuses.slice(0, 8).every((s) => s === 400)).toBe(true)
     expect(statuses.at(-1)).toBe(429)
+  })
+
+  it("logs failed logins, blocked requests and permission denials", async () => {
+    const lines: string[] = []
+    app = createApp({ pool, store: createPgStore(pool), config, messenger: { channels: { sms: false, email: false }, sms: async () => undefined, email: async () => undefined }, security: new SecurityMonitor({ log: (l) => lines.push(l) }) })
+    for (let i = 0; i < 9; i++) await rpc("login", ["dueno@affair.test", "mala"])
+    const owner = await rpc("login", ["dueno@laesquina.test", "prueba123"])
+    await rpc("adminBusinesses", [], { cookie: owner.cookie })
+    const events = lines.map((l) => JSON.parse(l))
+    expect(events.filter((e) => e.event === "auth.failed_login")).toHaveLength(8)
+    expect(events.find((e) => e.event === "auth.failed_login")).toMatchObject({ ip: `10.0.0.${ip}`, email: "dueno@affair.test" })
+    expect(events.some((e) => e.event === "auth.rate_limited" && e.route === "login")).toBe(true)
+    expect(events.find((e) => e.event === "authz.denied")).toMatchObject({ method: "adminBusinesses" })
+    expect(JSON.stringify(events)).not.toContain("mala")
   })
 
   it("sends the SMS code instead of returning it outside preview, and pairs a kiosk by header", async () => {

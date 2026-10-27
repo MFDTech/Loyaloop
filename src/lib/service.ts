@@ -453,6 +453,39 @@ function rule<T>(fn: () => T): T {
   }
 }
 
+/**
+ * Only the card's rule fields, typed. Anything else a request carries (notice
+ * texts, ids of other things, extra keys) is dropped before it is saved.
+ */
+export function cleanProgram(p: Partial<Omit<Program, "businessId">>): Omit<Program, "businessId" | "messages" | "missYouDays"> {
+  const input = (p && typeof p === "object" ? p : {}) as Partial<Omit<Program, "businessId">>
+  const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN)
+  const notify: Program["notify"] = {}
+  for (const e of NOTICE_EVENTS) if (typeof input.notify?.[e.key] === "boolean") notify[e.key] = input.notify[e.key]
+  const tiers = Array.isArray(input.tiers) ? input.tiers.slice(0, 10) : []
+  return {
+    type: input.type as Program["type"],
+    pointsPerPeso: num(input.pointsPerPeso),
+    minPurchase: num(input.minPurchase),
+    stampMinPurchase: num(input.stampMinPurchase),
+    stampGoal: num(input.stampGoal),
+    stampRewardId: typeof input.stampRewardId === "string" && input.stampRewardId ? input.stampRewardId.slice(0, 64) : undefined,
+    expirationMonths: num(input.expirationMonths),
+    tiers: tiers.map((t) => ({
+      id: typeof t?.id === "string" && /^[\w-]{1,40}$/.test(t.id) ? t.id : uid("tier_"),
+      name: text(t?.name, 40),
+      threshold: num(t?.threshold),
+      multiplier: num(t?.multiplier),
+    })),
+    tierDowngrade: !!input.tierDowngrade,
+    welcomeBonus: num(input.welcomeBonus),
+    birthdayBonus: num(input.birthdayBonus),
+    dailyLimit: num(input.dailyLimit),
+    suspiciousFactor: num(input.suspiciousFactor),
+    notify,
+  }
+}
+
 export function validateProgram(p: Omit<Program, "businessId">) {
   const numbers = [p.pointsPerPeso, p.minPurchase, p.stampMinPurchase, p.stampGoal, p.expirationMonths, p.welcomeBonus, p.birthdayBonus, p.dailyLimit, p.suspiciousFactor]
   if (numbers.some((n) => typeof n !== "number" || !Number.isFinite(n) || n < 0)) throw new ApiError("Revisa los números de las reglas: no pueden ser negativos.")
@@ -1017,6 +1050,7 @@ export function createService(store: Store, ctx: Context) {
       if (member.role === "owner" && owners.length === 1 && (input.role !== "owner" || !input.active)) throw new ApiError("El negocio necesita al menos un dueño activo.")
       const phone = input.phone ? normalizePhone(input.phone) : ""
       if (phone && phone.length !== 10) throw new ApiError("El teléfono debe tener 10 dígitos.")
+      if (input.branchId && !db.branches.some((b) => b.id === input.branchId && b.businessId === a.businessId)) throw new ApiError("Elige una de tus sucursales.")
       Object.assign(member, { role: input.role, phone, excludedFromEarning: !!input.excluded, active: !!input.active, branchId: input.branchId || undefined })
       audit(db, a, a.businessId, "Actualizó a una persona del equipo", member.name, now())
     })
@@ -1325,6 +1359,7 @@ export function createService(store: Store, ctx: Context) {
       if (input.branches.length > 1) throw new ApiError("El plan Starter incluye 1 sucursal.")
       if (input.program.type !== "stamps") throw new ApiError("En el plan Starter la tarjeta es de sellos.")
     }
+    input = { ...input, program: cleanProgram(input.program) }
     validateProgram(input.program)
     const id = uid("b_")
     const token = readableCode(32)
@@ -1369,8 +1404,9 @@ export function createService(store: Store, ctx: Context) {
     return { id, inviteLink: path, emailed }
   }
 
-  async function adminSaveProgram(businessId: string, program: Omit<Program, "businessId">) {
+  async function adminSaveProgram(businessId: string, input: Omit<Program, "businessId">) {
     const a = await asAdmin()
+    const program = cleanProgram(input)
     validateProgram(program)
     await store.write(B(businessId), (db) => {
       if (!db.businesses.some((b) => b.id === businessId)) throw new ApiError("El negocio no existe.")
@@ -1782,10 +1818,13 @@ export function createService(store: Store, ctx: Context) {
     const a = await inBusiness(["owner"])
     const business = await store.business(a.businessId)
     if (business?.plan !== "starter") throw new ApiError("Las reglas de tu tarjeta las configura LoyaLoop. Escríbenos para cambiarlas.", "forbidden")
-    const program = { ...input.program, type: "stamps" as const, stampMinPurchase: 0, tiers: [] }
+    const program = { ...cleanProgram(input?.program), type: "stamps" as const, stampMinPurchase: 0, tiers: [] }
     validateProgram(program)
     const color = String(input.brand?.brand?.color || "")
     if (!/^#[\da-f]{6}$/i.test(color)) throw new ApiError("Elige un color válido para tu tarjeta.")
+    for (const image of [input.brand.brand.logo, input.brand.brand.strip])
+      if (image !== undefined && image !== "" && !(typeof image === "string" && /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(image) && image.length < 700_000))
+        throw new ApiError("La imagen no es válida. Usa PNG, JPG, WebP o SVG de menos de 400 KB.")
     const discreet = !!input.brand.discreet
     const neutralName = text(input.brand.neutralName, 40)
     if (discreet && !neutralName) throw new ApiError("Escribe el nombre neutro para el modo discreto.")
