@@ -84,6 +84,8 @@ export function stampStripSvg(count: number, goal: number, style: StampStyle, sc
   let out = style.background ? `<rect width="100%" height="100%" fill="${style.background.replace(/[^#\w(),.% -]/g, "")}"/>` : ""
   cells.forEach(({ cx, cy }, i) => {
     const earned = i < count
+    // Over the business's own image (no background): a soft shade behind each stamp keeps it readable without darkening the picture.
+    if (!style.background) out += `<circle cx="${cx}" cy="${cy}" r="${r + line * 1.5}" fill="#000000" fill-opacity="0.22"/>`
     if (earned && style.glyph === "logo" && style.logo) {
       out += `<clipPath id="c${i}"><circle cx="${cx}" cy="${cy}" r="${r - line}"/></clipPath>`
       out += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#FFFFFF"/>`

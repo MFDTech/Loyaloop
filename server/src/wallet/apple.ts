@@ -149,7 +149,7 @@ export class AppleWallet {
       if (program.type === "stamps" && customer) {
         if (stripImage) {
           // Darkened photo with white stamps on top.
-          const background = await sharp(stripImage).resize(width, height, { fit: "cover" }).modulate({ brightness: 0.5 }).png().toBuffer()
+          const background = await sharp(stripImage).resize(width, height, { fit: "cover" }).png().toBuffer()
           const overlay = stampsSvg(customer.stamps, program.stampGoal, { background: null, ink: "#FFFFFF", mark: color, glyph, logo: logoUri }, scale)
           files[name] = await sharp(background).composite([{ input: await sharp(overlay).png().toBuffer() }]).png().toBuffer()
         } else {

@@ -56,7 +56,7 @@ export function ApplePass({ card, holder, back = false }: PassData & { back?: bo
           </div>
           <div
             className={`ll-pass-strip ${stamps ? "has-stamps" : ""}`}
-            style={card.brand.strip ? { backgroundImage: stamps ? `linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(${card.brand.strip})` : `url(${card.brand.strip})` } : undefined}
+            style={card.brand.strip ? { backgroundImage: `url(${card.brand.strip})` } : undefined}
           >
             {stamps ? (
               <Stamps card={card} count={holder.stamps} overStrip={!!card.brand.strip} />
