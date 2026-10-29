@@ -6,6 +6,7 @@
 
 import * as engine from "./engine"
 import { DEFAULT_MISS_YOU_DAYS, MAX_NOTICE, MAX_PROMOTIONS_PER_DAY, NOTICE_EVENTS, NOTICES_PRO_MESSAGE, PROMOTION_VARS, planHasNotices, unknownVars, type Audience } from "./notices"
+import { parseLocation, type LatLng } from "./location"
 import { DEMO_BUSINESS_ID, DEMO_CODE, DEMO_RETENTION_DAYS, defaultProgram, demoBusiness } from "./seed"
 import type {
   Campaign,
@@ -902,8 +903,24 @@ export function createService(store: Store, ctx: Context) {
     })
   }
 
-  async function saveBranch(input: { id?: string; name: string; address: string }) {
+  async function saveBranch(input: { id?: string; name: string; address: string; location?: string }) {
     const a = await inBusiness(["owner"])
+    // undefined: keep the location; "": remove it; else a Google Maps link or «lat, lng».
+    let place: LatLng | null | undefined
+    if (typeof input.location === "string") {
+      const parsed = input.location.trim() ? parseLocation(input.location) : null
+      if (parsed === "short") throw new ApiError("Ese enlace corto no trae la ubicación. Ábrelo y copia el enlace largo de la barra del navegador, o pega las coordenadas (clic derecho en el mapa).")
+      if (input.location.trim() && !parsed) throw new ApiError("No encontramos la ubicación en ese enlace. Pega el enlace de Google Maps de la sucursal o sus coordenadas, por ejemplo 19.4326, -99.1332.")
+      place = parsed
+    }
+    const setPlace = (branch: Branch) => {
+      if (place === undefined) return
+      if (place) Object.assign(branch, place)
+      else {
+        delete branch.latitude
+        delete branch.longitude
+      }
+    }
     const saved = await store.write(B(a.businessId), (db) => {
       const name = text(input.name, 80)
       if (!name) throw new ApiError("Escribe el nombre de la sucursal.")
@@ -912,12 +929,14 @@ export function createService(store: Store, ctx: Context) {
         if (!branch) throw new ApiError("No encontramos esa sucursal.")
         branch.name = name
         branch.address = text(input.address, 200)
+        setPlace(branch)
         audit(db, a, a.businessId, "Editó una sucursal", branch.name, now())
         return branch
       }
       if (db.businesses.find((b) => b.id === a.businessId)?.plan === "starter" && db.branches.some((b) => b.businessId === a.businessId))
         throw new ApiError("El plan Starter incluye 1 sucursal. Para agregar más (+$250 al mes cada una) escríbenos a hola@loyaloop.com.mx.", "plan_limit")
       const branch: Branch = { id: uid("br_"), businessId: a.businessId, name, address: text(input.address, 200), code: readableCode(6), createdAt: iso() }
+      setPlace(branch)
       db.branches.push(branch)
       db.registers.push({ id: uid("rg_"), businessId: a.businessId, branchId: branch.id, name: "Caja 1" })
       audit(db, a, a.businessId, "Creó una sucursal", branch.name, now())

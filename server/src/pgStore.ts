@@ -169,7 +169,7 @@ async function enqueueWalletJobs(client: Client, before: Snapshot, after: DB, sc
        on conflict (kind, ref) where status = 'pending' do nothing`,
       [JSON.stringify(fresh)],
     )
-  if (scope !== "global" && (changedIds("businesses").length || changedIds("programs").length || changedIds("rewards").length))
+  if (scope !== "global" && (changedIds("businesses").length || changedIds("programs").length || changedIds("rewards").length || changedIds("branches").length))
     await client.query(
       `insert into wallet_jobs (kind, business_id, ref) select 'class', $1, $1 where exists (select 1 from wallet_passes where business_id = $1)
        on conflict (kind, ref) where status = 'pending' do nothing`,

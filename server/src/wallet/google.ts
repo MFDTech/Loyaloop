@@ -6,7 +6,8 @@ import { createSign } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { cardFrom } from "../../../src/lib/card"
 import { backFields } from "../../../src/lib/passText"
-import type { Business, Customer, Program, Reward } from "../../../src/lib/types"
+import { passLocations } from "../../../src/lib/location"
+import type { Branch, Business, Customer, Program, Reward } from "../../../src/lib/types"
 
 const API = "https://walletobjects.googleapis.com/walletobjects/v1"
 const SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer"
@@ -30,6 +31,8 @@ export interface PassData {
   program: Program
   rewards: Reward[]
   customer?: Customer
+  /** For «Aviso al llegar a la sucursal». */
+  branches?: Branch[]
 }
 
 export class GoogleWalletError extends Error {
@@ -104,7 +107,7 @@ export class GoogleWallet {
     }
   }
 
-  buildObject({ business, program, rewards, customer }: PassData) {
+  buildObject({ business, program, rewards, customer, branches = [] }: PassData) {
     if (!customer) throw new Error("Falta el cliente")
     const stamps = program.type === "stamps"
     const tier = program.tiers.find((t) => t.id === customer.tierId)
@@ -124,6 +127,8 @@ export class GoogleWallet {
       accountName: cut(customer.name.split(" ")[0] || customer.name, 20),
       loyaltyPoints: stamps ? { label: "Sellos", balance: { string: `${customer.stamps}/${program.stampGoal}` } } : { label: "Puntos", balance: { int: customer.points } },
       ...(secondary ? { secondaryLoyaltyPoints: secondary } : {}),
+      // Google may show the card near these places (up to 10 per card); empty clears them.
+      merchantLocations: passLocations(business, branches).map(({ latitude, longitude }) => ({ latitude, longitude })),
       barcode: { type: "QR_CODE", value: customer.token, alternateText: business.discreet ? customer.token : `${customer.token} · Powered by LoyaLoop` },
       textModulesData: nextReward ? [{ id: "next", header: "Tu siguiente recompensa", body: `${nextReward.name}: te faltan ${nextReward.cost - customer.points} puntos.` }] : [],
     }

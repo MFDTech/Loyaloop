@@ -100,6 +100,9 @@ export interface Branch {
   address: string
   /** Short opaque code used in the NFC link: /r/<code>. */
   code: string
+  /** Where it is, for «Aviso al llegar a la sucursal» on the passes. */
+  latitude?: number
+  longitude?: number
   createdAt: string
 }
 

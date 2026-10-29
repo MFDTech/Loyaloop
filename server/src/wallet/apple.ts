@@ -11,6 +11,7 @@ import http2 from "node:http2"
 import forge from "node-forge"
 import JSZip from "jszip"
 import sharp from "sharp"
+import { nearbyText, passLocations } from "../../../src/lib/location"
 import { cardFrom } from "../../../src/lib/card"
 import { backFields } from "../../../src/lib/passText"
 import { STRIP, stampGlyph, stampStripSvg, type StampStyle } from "../../../src/lib/stampIcons"
@@ -81,7 +82,8 @@ export class AppleWallet {
   }
 
   passJson(input: ApplePassInput) {
-    const { business, program, rewards, customer } = input
+    const { business, program, rewards, customer, branches = [] } = input
+    const places = passLocations(business, branches)
     if (!customer) throw new Error("Falta el cliente")
     const card = cardFrom(business, program, rewards)
     const { ink } = inkFor(business.brand.color)
@@ -110,6 +112,8 @@ export class AppleWallet {
       labelColor: label,
       backgroundColor: rgb(business.brand.color),
       sharingProhibited: true,
+      // The iPhone shows the card on the lock screen near a branch; LoyaLoop never learns where the customer is.
+      ...(places.length ? { locations: places.map((p) => ({ latitude: p.latitude, longitude: p.longitude, relevantText: nearbyText(p.name, program, customer) })) } : {}),
       barcodes: [{ format: "PKBarcodeFormatQR", message: customer.token, messageEncoding: "iso-8859-1", altText: business.discreet ? customer.token : `${customer.token} · Powered by LoyaLoop` }],
       storeCard: {
         headerFields: [balance],

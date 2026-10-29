@@ -265,7 +265,7 @@ export function BrandEditor({ value, onChange, name, stamps = false, starter = f
         onChange={(askPhone) => onChange({ ...value, askPhone })}
       />
       )}
-      {!starter && <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />}
+      {!starter && <Check label="Aviso al llegar a la sucursal" hint="La Wallet muestra la tarjeta en la pantalla bloqueada cerca de la sucursal. Necesita la ubicación de cada sucursal (Sucursales y cajas)." checked={value.locationAlerts} disabled={value.discreet} onChange={(locationAlerts) => onChange({ ...value, locationAlerts })} />}
     </div>
   )
 }

@@ -5,7 +5,7 @@
 
 import { randomBytes, timingSafeEqual } from "node:crypto"
 import type { Wallets, WalletLinks } from "../../../src/lib/service"
-import type { Business, Customer, Program, Reward } from "../../../src/lib/types"
+import type { Branch, Business, Customer, Program, Reward } from "../../../src/lib/types"
 import type { Pool } from "../db"
 import type { AppleWallet } from "./apple"
 import { GoogleWallet, type PassData } from "./google"
@@ -20,7 +20,8 @@ async function loadPass(pool: Pool, businessId: string, customerId?: string): Pr
   const rewards = (await pool.query<{ data: Reward }>("select data from rewards where business_id = $1 order by at", [businessId])).rows.map((r) => r.data)
   const customer = customerId ? await one<Customer>("select data from customers where pk = $1 and business_id = $2", [customerId, businessId]) : undefined
   if (customerId && !customer) return null
-  return { business, program, rewards, customer }
+  const branches = (await pool.query<{ data: Branch }>("select data from branches where business_id = $1 order by at", [businessId])).rows.map((r) => r.data)
+  return { business, program, rewards, customer, branches }
 }
 
 const sameText = (a: string, b: string) => {

@@ -116,6 +116,18 @@ describe("Apple Wallet pass building", () => {
     expect(json.storeCard.backFields[0]).toEqual({ key: "notice", label: "Último aviso", value: "Ganaste un sello", changeMessage: "%@" })
   })
 
+  it("puts the branches on the pass for «Aviso al llegar», with the customer's progress, never in discreet mode", () => {
+    const customer = { ...seed.customers.find((c) => c.businessId === "b_esquina")!, stamps: 7, earnedRewards: [] }
+    const branches = [{ ...seed.branches.find((b) => b.id === "br_esq_roma")!, latitude: 19.4194, longitude: -99.1621 }, seed.branches.find((b) => b.id === "br_esq_condesa")!]
+    const on = { ...pick("b_esquina"), business: { ...pick("b_esquina").business, locationAlerts: true } }
+    const json = apple.passJson({ ...on, branches, customer, serial: customer.id, authToken: "x".repeat(20) }) as { locations?: unknown[] }
+    expect(json.locations).toEqual([{ latitude: 19.4194, longitude: -99.1621, relevantText: "Estás cerca de Roma. ¡Te falta un sello para tu premio!" }])
+    const off = { ...on, business: { ...on.business, locationAlerts: false } }
+    expect((apple.passJson({ ...off, branches, customer, serial: customer.id, authToken: "x".repeat(20) }) as { locations?: unknown }).locations).toBeUndefined()
+    const discreet = { ...on, business: { ...on.business, discreet: true } }
+    expect((apple.passJson({ ...discreet, branches, customer, serial: customer.id, authToken: "x".repeat(20) }) as { locations?: unknown }).locations).toBeUndefined()
+  })
+
   it("builds a zip whose manifest matches every file, with stamp strips at each scale", async () => {
     const customer = seed.customers.find((c) => c.businessId === "b_esquina")!
     const files = await unzip(await apple.build({ ...pick("b_esquina"), customer, serial: customer.id, authToken: "x".repeat(20) }))

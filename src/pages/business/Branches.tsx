@@ -39,7 +39,19 @@ export default function Branches({ me }: { me: api.Me }) {
           <Card
             key={branch.id}
             title={branch.name}
-            description={branch.address || "Sin dirección"}
+            description={
+              <>
+                {branch.address || "Sin dirección"}
+                {typeof branch.latitude === "number" && (
+                  <>
+                    {" · "}
+                    <a className="ll-link" href={`https://www.google.com/maps?q=${branch.latitude},${branch.longitude}`} target="_blank" rel="noreferrer">
+                      Ver ubicación
+                    </a>
+                  </>
+                )}
+              </>
+            }
             actions={
               <>
                 <Button variant="secondary" size="sm" onClick={() => setTag(branch)}>
@@ -155,6 +167,7 @@ function RemoveDialog({ title, body, action, done, confirm = "Eliminar", onClose
 function BranchForm({ branch, onClose }: { branch: Branch | null; onClose: () => void }) {
   const [name, setName] = useState(branch?.name || "")
   const [address, setAddress] = useState(branch?.address || "")
+  const [location, setLocation] = useState(typeof branch?.latitude === "number" ? `${branch.latitude}, ${branch.longitude}` : "")
   const { run, pending, error } = useAction(api.saveBranch)
   const toast = useToast()
   return (
@@ -178,7 +191,7 @@ function BranchForm({ branch, onClose }: { branch: Branch | null; onClose: () =>
         className="ll-form"
         onSubmit={async (e) => {
           e.preventDefault()
-          const r = await run({ id: branch?.id, name, address })
+          const r = await run({ id: branch?.id, name, address, location })
           if (r.ok) {
             toast(branch ? "Sucursal actualizada." : "Sucursal creada.")
             onClose()
@@ -187,6 +200,15 @@ function BranchForm({ branch, onClose }: { branch: Branch | null; onClose: () =>
       >
         <Field label="Nombre" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="Por ejemplo: Condesa" />
         <Field label="Dirección" optional value={address} maxLength={140} onChange={(e) => setAddress(e.target.value)} />
+        <Field
+          label="Ubicación en Google Maps"
+          optional
+          value={location}
+          maxLength={2000}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Pega el enlace de Google Maps o 19.4326, -99.1332"
+          hint="Busca la sucursal en Google Maps y copia el enlace de la barra del navegador. Con el aviso al llegar encendido, la tarjeta aparece en la pantalla del celular del cliente cuando pasa cerca."
+        />
         {error && <Notice tone="error">{error}</Notice>}
       </form>
     </Modal>

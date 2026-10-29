@@ -793,6 +793,23 @@ for (const [label, make] of backends) {
       })
     })
 
+    describe("branch locations", () => {
+      it("saves a branch's place from a Google Maps link and explains short links", async () => {
+        await as("dueno@laesquina.test")
+        await expect(api.saveBranch({ id: "br_esq_roma", name: "Roma", address: "", location: "https://maps.app.goo.gl/AbC" })).rejects.toThrow(/enlace corto/)
+        await expect(api.saveBranch({ id: "br_esq_roma", name: "Roma", address: "", location: "en la esquina" })).rejects.toThrow(/No encontramos la ubicación/)
+        await api.saveBranch({ id: "br_esq_roma", name: "Roma", address: "Col. Roma Norte", location: "https://www.google.com/maps/@19.4194,-99.1621,17z" })
+        let roma = (await api.bundle()).branches.find((b) => b.id === "br_esq_roma")!
+        expect(roma).toMatchObject({ latitude: 19.4194, longitude: -99.1621 })
+        // Saving without the field keeps it; an empty field removes it.
+        await api.saveBranch({ id: "br_esq_roma", name: "Roma Norte", address: "" })
+        roma = (await api.bundle()).branches.find((b) => b.id === "br_esq_roma")!
+        expect(roma.latitude).toBe(19.4194)
+        await api.saveBranch({ id: "br_esq_roma", name: "Roma Norte", address: "", location: "" })
+        expect((await api.bundle()).branches.find((b) => b.id === "br_esq_roma")!.latitude).toBeUndefined()
+      })
+    })
+
     describe("devices", () => {
       it("accepts a card in every branch of its business and never in another business", async () => {
         await as("dueno@laesquina.test")
