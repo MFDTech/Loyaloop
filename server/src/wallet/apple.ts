@@ -110,7 +110,7 @@ export class AppleWallet {
       labelColor: label,
       backgroundColor: rgb(business.brand.color),
       sharingProhibited: true,
-      barcodes: [{ format: "PKBarcodeFormatQR", message: customer.token, messageEncoding: "iso-8859-1", altText: customer.token }],
+      barcodes: [{ format: "PKBarcodeFormatQR", message: customer.token, messageEncoding: "iso-8859-1", altText: business.discreet ? customer.token : `${customer.token} · Powered by LoyaLoop` }],
       storeCard: {
         headerFields: [balance],
         ...(stamps ? {} : { primaryFields: [program.type === "tiers" ? { key: "level", label: "NIVEL", value: tier?.name || program.tiers[0]?.name || "—" } : { key: "points", label: "SALDO", value: `${customer.points} pts` }] }),

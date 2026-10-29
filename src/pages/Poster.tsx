@@ -41,7 +41,7 @@ export default function Poster({ code }: { code: string }) {
           <p>Programa de lealtad</p>
         </header>
         <div className="ll-poster-qr">
-          <Qr value={absoluteLink(`/r/${code}`)} size={220} label={`Código para unirse al programa de ${card.businessName}`} />
+          <Qr value={absoluteLink(`/r/${code}`)} size={220} label={`Código para unirse al programa de ${card.businessName}`} powered={!card.discreet} />
         </div>
         <h2>Escanea y únete</h2>
         <ol>

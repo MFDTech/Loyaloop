@@ -124,7 +124,7 @@ export class GoogleWallet {
       accountName: cut(customer.name.split(" ")[0] || customer.name, 20),
       loyaltyPoints: stamps ? { label: "Sellos", balance: { string: `${customer.stamps}/${program.stampGoal}` } } : { label: "Puntos", balance: { int: customer.points } },
       ...(secondary ? { secondaryLoyaltyPoints: secondary } : {}),
-      barcode: { type: "QR_CODE", value: customer.token, alternateText: customer.token },
+      barcode: { type: "QR_CODE", value: customer.token, alternateText: business.discreet ? customer.token : `${customer.token} · Powered by LoyaLoop` },
       textModulesData: nextReward ? [{ id: "next", header: "Tu siguiente recompensa", body: `${nextReward.name}: te faltan ${nextReward.cost - customer.points} puntos.` }] : [],
     }
   }

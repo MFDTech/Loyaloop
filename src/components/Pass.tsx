@@ -3,7 +3,7 @@ import type { CardHolder, PublicCard } from "../lib/api"
 import { backFields } from "../lib/passText"
 import { stampGlyph, stampStripSvg } from "../lib/stampIcons"
 import { cardTypeLabel, inkFor, int } from "../lib/util"
-import Qr from "./Qr"
+import Qr, { POWERED_BY } from "./Qr"
 import { Icon, Segmented } from "./ui"
 
 export interface PassData {
@@ -91,7 +91,7 @@ export function ApplePass({ card, holder, back = false }: PassData & { back?: bo
           </div>
           <div className="ll-pass-barcode">
             <Qr value={holder.token} size={118} label={`Código de la tarjeta ${holder.token}`} />
-            <small>{holder.token}</small>
+            <small>{card.discreet ? holder.token : `${holder.token} · ${POWERED_BY}`}</small>
           </div>
         </>
       ) : (
@@ -130,7 +130,7 @@ export function GooglePass({ card, holder }: PassData) {
       </div>
       <div className="ll-gpass-barcode">
         <Qr value={holder.token} size={124} label={`Código de la tarjeta ${holder.token}`} />
-        <small>{holder.token}</small>
+        <small>{card.discreet ? holder.token : `${holder.token} · ${POWERED_BY}`}</small>
       </div>
       {stamps && (
         <div className="ll-gpass-hero">

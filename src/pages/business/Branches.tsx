@@ -95,7 +95,7 @@ export default function Branches({ me }: { me: api.Me }) {
       {branchForm && <BranchForm branch={branchForm === "new" ? null : branchForm} onClose={() => setBranchForm(null)} />}
       {registerForm && <RegisterForm {...registerForm} onClose={() => setRegisterForm(null)} />}
       {pairing && <PairingModal register={pairing} onClose={() => setPairing(null)} />}
-      {tag && <TagModal branch={tag} onClose={() => setTag(null)} />}
+      {tag && <TagModal branch={tag} discreet={!!b.data?.business.discreet} onClose={() => setTag(null)} />}
       {removeBranch && (
         <RemoveDialog
           title={`¿Eliminar ${removeBranch.name}?`}
@@ -287,7 +287,7 @@ export function PairingModal({ register, onClose }: { register: Register; onClos
   )
 }
 
-function TagModal({ branch, onClose }: { branch: Branch; onClose: () => void }) {
+function TagModal({ branch, discreet, onClose }: { branch: Branch; discreet: boolean; onClose: () => void }) {
   const link = absoluteLink(`/r/${branch.code}`)
   return (
     <Modal title={`Etiqueta NFC de ${branch.name}`} description="Graba este enlace en la etiqueta NFC del mostrador. Al acercar el celular, el cliente abre su registro." onClose={onClose} footer={<Button onClick={onClose}>Listo</Button>}>
@@ -302,7 +302,7 @@ function TagModal({ branch, onClose }: { branch: Branch; onClose: () => void }) 
           <li>Acerca la etiqueta y prueba tocándola con otro celular.</li>
         </ol>
         <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
-          <Qr value={link} size={180} label={`Código QR para registrarse en ${branch.name}`} />
+          <Qr value={link} size={180} label={`Código QR para registrarse en ${branch.name}`} powered={!discreet} />
           <p className="ll-hint" style={{ textAlign: "center" }}>
             Imprime también este QR junto a la etiqueta, para los celulares sin NFC.
           </p>

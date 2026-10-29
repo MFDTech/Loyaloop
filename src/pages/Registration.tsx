@@ -416,7 +416,7 @@ export function Done({ card, holder: initial, links, code }: { card: api.PublicC
       <div className="ll-reg-pass">{device === "google" ? <GooglePass card={card} holder={holder} /> : <ApplePass card={card} holder={holder} />}</div>
       {device === "desktop" && (
         <div className="ll-reg-desktop">
-          <Qr value={absoluteLink(card.demo ? "/demo" : `/r/${code}`)} size={120} label="Código para abrir esta página en tu celular" />
+          <Qr value={absoluteLink(card.demo ? "/demo" : `/r/${code}`)} size={120} label="Código para abrir esta página en tu celular" powered={!card.discreet} />
           <p className="ll-hint">
             {card.demo
               ? "¿Estás en una computadora? Escanea este código con tu celular para guardar la tarjeta en tu Wallet."

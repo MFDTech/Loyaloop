@@ -2,7 +2,10 @@ import QRCode from "qrcode"
 import { useEffect, useState } from "react"
 
 /** Real, scannable QR code rendered as SVG. */
-export default function Qr({ value, size = 160, label }: { value: string; size?: number; label: string }) {
+/** Line printed under customer-facing QR codes (hidden in discreet mode). */
+export const POWERED_BY = "Powered by LoyaLoop"
+
+export default function Qr({ value, size = 160, label, powered = false }: { value: string; size?: number; label: string; powered?: boolean }) {
   const [svg, setSvg] = useState("")
   useEffect(() => {
     let alive = true
@@ -13,5 +16,12 @@ export default function Qr({ value, size = 160, label }: { value: string; size?:
       alive = false
     }
   }, [value])
-  return <span className="ll-qr" role="img" aria-label={label} style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} />
+  const code = <span className="ll-qr" role="img" aria-label={label} style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} />
+  if (!powered) return code
+  return (
+    <span className="ll-qr-powered">
+      {code}
+      <small>{POWERED_BY}</small>
+    </span>
+  )
 }
