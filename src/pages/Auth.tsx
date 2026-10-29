@@ -202,7 +202,7 @@ export function RecoverPassword() {
             <Notice tone="success" title="Revisa tu correo">
               Si {email} tiene una cuenta, recibirás el enlace en unos minutos. Vence en una hora.
             </Notice>
-            {sent.previewLink && (
+            {PREVIEW && sent.previewLink && (
               <Notice tone="info" title="Modo de prueba">
                 Todavía no se envían correos. Usa este enlace: <a className="ll-link" href={sent.previewLink}>Crear contraseña nueva</a>
               </Notice>

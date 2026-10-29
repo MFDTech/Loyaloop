@@ -662,8 +662,8 @@ export function createService(store: Store, ctx: Context) {
       action: { label: "Crear contraseña nueva", url: link(path) },
       footnote: "Si no lo pediste, ignora este correo: tu contraseña no cambia.",
     })
-    // The link is shown on screen only in preview: anywhere else it would let anyone take over the account.
-    return ctx.preview ? { previewLink: path } : {}
+    // The link is shown on screen only in a preview without email: anywhere else it would let anyone take over the account.
+    return ctx.preview && !ctx.messenger.channels.email ? { previewLink: path } : {}
   }
 
   function checkPassword(password: unknown) {
@@ -2142,7 +2142,7 @@ export function createService(store: Store, ctx: Context) {
     }
     if (ctx.messenger.channels.sms) {
       await ctx.messenger.sms(phone, `${result.sms} es tu código de ${name}. Vence en 10 minutos.`)
-      return { previewCode: ctx.preview ? result.sms : "", existing: result.existing, channel: "sms" }
+      return { previewCode: "", existing: result.existing, channel: "sms" }
     }
     if (!ctx.preview) throw new ApiError("Por ahora no podemos enviar códigos. Inténtalo más tarde.", "unavailable")
     return { previewCode: result.sms, existing: result.existing, channel: "preview" }
@@ -2307,7 +2307,7 @@ export function createService(store: Store, ctx: Context) {
       action: { label: "Abrir mi tarjeta", url: link(path) },
       footnote: "Si no lo pediste, ignora este correo.",
     })
-    return ctx.preview ? { previewLink: path } : {}
+    return ctx.preview && !ctx.messenger.channels.email ? { previewLink: path } : {}
   }
 
   async function openCardLink(code: string, token: string): Promise<{ card: PublicCard; holder: CardHolder; created: boolean; links: WalletLinks }> {

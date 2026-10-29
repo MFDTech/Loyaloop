@@ -25,6 +25,7 @@ if (messenger.code) console.log(`[codigo] WhatsApp de Meta activo (plantilla ${c
 else if (messenger.verifier) console.log(`[sms] Twilio Verify activo (${config.twilioVerifyChannel})`)
 else if (!config.preview) console.warn("[aviso] Sin proveedor de SMS o WhatsApp: los negocios con «Pedir celular al registrarse» no pueden registrar clientes (el registro con solo nombre funciona).")
 else console.warn("[aviso] Códigos de registro en pantalla (PREVIEW=true): configura un proveedor antes de pedir celular a los clientes.")
+if (config.preview && config.publicUrl.startsWith("https://")) console.warn("[aviso] PREVIEW=true en un servidor público: apágalo en .env (PREVIEW=false) para que ningún texto ni código de prueba llegue a los clientes.")
 if (config.simulator) console.warn("[aviso] El simulador de cobros está encendido (SIMULATOR=true). Apágalo en producción.")
 
 let google: GoogleWallet | null = null

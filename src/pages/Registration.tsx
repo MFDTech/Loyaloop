@@ -129,8 +129,10 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
     if (normalizePhone(form.phone).length !== 10) return setLocalError("Escribe tu celular a 10 dígitos.")
     const r = await send.run(code, form.phone, nextMode)
     if (!r.ok) return
+    // A server still in preview mode without SMS: never show the code on a public build.
+    if (!PREVIEW && r.value.channel === "preview") return setLocalError("Por ahora no podemos enviar códigos. Inténtalo más tarde.")
     setMode(nextMode)
-    setPreview(r.value.previewCode)
+    setPreview(PREVIEW ? r.value.previewCode : "")
     setChannel(r.value.channel)
     setExisting(r.value.existing)
     setSms("")
@@ -242,7 +244,7 @@ export default function Registration({ code, cardToken = "" }: { code: string; c
               {mailed ? (
                 <Notice tone="success" title="Revisa tu correo">
                   Si hay una tarjeta con ese correo, te llegará un enlace en unos minutos.
-                  {mailed.previewLink && (
+                  {PREVIEW && mailed.previewLink && (
                     <>
                       {" "}
                       Versión de prueba:{" "}
