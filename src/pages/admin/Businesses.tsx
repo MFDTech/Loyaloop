@@ -6,7 +6,7 @@ import type { BusinessStatus } from "../../lib/types"
 import { cardTypeLabel, inkFor, int, plural } from "../../lib/util"
 import { Badge, Button, Card, Empty, ErrorState, Icon, Loading, Notice, PageHeader, SelectField, Stat } from "../../components/ui"
 
-export const statusLabel: Record<BusinessStatus, string> = { pending: "Por activar", active: "Activo", trial: "En prueba", paused: "Pausado" }
+export const statusLabel: Record<BusinessStatus, string> = { pending: "Por activar", active: "Activo", trial: "Periodo gratis", paused: "Pausado" }
 export const statusTone = { pending: "warning", active: "success", trial: "info", paused: "warning" } as const
 
 export function BusinessesTable({ rows }: { rows: api.BusinessRow[] }) {
@@ -87,7 +87,7 @@ export function AdminHome() {
         </Notice>
       )}
       <div className="ll-stats">
-        <Stat label="Negocios" icon="store" value={int(m.businesses)} detail={`${m.active} ${m.active === 1 ? "activo" : "activos"} · ${m.trial} en prueba · ${m.paused} ${m.paused === 1 ? "pausado" : "pausados"}`} />
+        <Stat label="Negocios" icon="store" value={int(m.businesses)} detail={`${m.active} ${m.active === 1 ? "activo" : "activos"} · ${m.trial} en periodo gratis · ${m.paused} ${m.paused === 1 ? "pausado" : "pausados"}`} />
         <Stat label="Sucursales" icon="building" value={int(m.branches)} detail="Base del cobro mensual" />
         <Stat label="Clientes con tarjeta" icon="users" value={int(m.customers)} />
         <Stat label="Movimientos" icon="activity" value={int(m.transactions30d)} detail={m.inReview ? `${m.inReview} cobros en revisión` : "Últimos 30 días"} />
@@ -129,7 +129,7 @@ export default function Businesses() {
             <option value="">Todos</option>
             <option value="active">Activos</option>
             <option value="pending">Por activar</option>
-            <option value="trial">En prueba</option>
+            <option value="trial">Periodo gratis</option>
             <option value="paused">Pausados</option>
           </SelectField>
         </div>

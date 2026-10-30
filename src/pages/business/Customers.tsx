@@ -109,7 +109,7 @@ export default function Customers({ me }: { me: api.Me }) {
           </div>
         ) : !rows.length ? (
           <Empty icon="users" title={list.data.length ? "Nadie coincide con tu búsqueda" : "Aún no tienes clientes"}>
-            {list.data.length ? "Prueba con otro nombre, correo o dígitos del celular." : "Coloca la etiqueta NFC en el mostrador para que tus clientes se registren."}
+            {list.data.length ? "Busca con otro nombre, correo o dígitos del celular." : "Coloca la etiqueta NFC en el mostrador para que tus clientes se registren."}
           </Empty>
         ) : (
           <>

@@ -6,7 +6,7 @@ import type { Prospect, ProspectStage } from "../../lib/types"
 import { dateTime, formatPhone, relative } from "../../lib/util"
 import { Badge, Button, Card, Confirm, Empty, ErrorState, Field, Icon, Loading, Modal, Notice, PageHeader, SelectField, Tabs, TextArea, useToast } from "../../components/ui"
 
-export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "En prueba", won: "Cliente", lost: "No por ahora" }
+export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "Periodo gratis", won: "Cliente", lost: "No por ahora" }
 const STAGE_TONE = { to_visit: "neutral", visited: "info", demo: "brand", trial: "warning", won: "success", lost: "neutral" } as const
 const STAGES = Object.keys(STAGE_LABEL) as ProspectStage[]
 const SECTORS = ["Pilates", "Barre", "Yoga", "Gimnasio o box", "Cafetería", "Restaurante", "Barbería", "Estética", "Otro"]

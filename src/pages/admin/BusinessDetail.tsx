@@ -203,11 +203,11 @@ function DataTab({ data }: { data: AdminBundle }) {
               {business.status === "paused"
                 ? "La cuenta está pausada: el equipo no puede entrar, el registro está cerrado y los escáneres no suman."
                 : business.status === "pending"
-                  ? "Se dio de alta desde la página y espera activación: el dueño ya diseña su tarjeta, pero el registro y la caja están cerrados. Actívala cuando pague o dale una prueba."
+                  ? "Se dio de alta desde la página y espera activación: el dueño ya diseña su tarjeta, pero el registro y la caja están cerrados. Actívala cuando pague o dale días gratis."
                   : business.status === "trial"
                     ? business.trialEndsAt
-                      ? `En prueba hasta el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}. Después se cierra el registro hasta que la actives.`
-                      : "En prueba: todo funciona y aún no se cobra."
+                      ? `Gratis hasta el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}. Después se cierra el registro hasta que la actives.`
+                      : "Periodo gratis: todo funciona y aún no se cobra."
                     : "Activa: se cobra cada mes."}
             </p>
             <div className="ll-row">
@@ -219,10 +219,10 @@ function DataTab({ data }: { data: AdminBundle }) {
                   disabled={save.pending}
                   onClick={async () => {
                     const r = await save.run(business.id, { trialDays: days })
-                    if (r.ok) toast(`Prueba de ${days} días activada.`)
+                    if (r.ok) toast(`${days} días gratis activados.`)
                   }}
                 >
-                  Dar prueba de {days} días
+                  Dar {days} días gratis
                 </Button>
               ))}
             </div>
@@ -231,7 +231,7 @@ function DataTab({ data }: { data: AdminBundle }) {
                 .filter((s) => s !== business.status)
                 .map((s) => (
                   <Button key={s} variant={s === "paused" ? "danger" : "secondary"} size="sm" onClick={() => setStatus(s)}>
-                    {s === "active" ? "Activar" : s === "trial" ? "Pasar a prueba" : "Pausar"}
+                    {s === "active" ? "Activar" : s === "trial" ? "Pasar a periodo gratis" : "Pausar"}
                   </Button>
                 ))}
             </div>
@@ -254,7 +254,7 @@ function DataTab({ data }: { data: AdminBundle }) {
           </ul>
         </Card>
         {!business.demo && (
-          <Card title="Eliminar negocio" description="Para negocios de prueba o que ya no trabajan con LoyaLoop. No se puede deshacer.">
+          <Card title="Eliminar negocio" description="Para negocios dados de alta por error o que ya no trabajan con LoyaLoop. No se puede deshacer.">
             <div className="ll-stack">
               <p className="ll-hint">
                 Se borran su tarjeta, sus {int(data.customerCount)} {data.customerCount === 1 ? "cliente" : "clientes"} con todo su historial, sus sucursales, escáneres y equipo. Si solo quieres
@@ -325,7 +325,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
   const toast = useToast()
   return (
     <Confirm
-      title={status === "paused" ? `¿Pausar ${name}?` : status === "active" ? `¿Activar ${name}?` : `¿Pasar ${name} a prueba?`}
+      title={status === "paused" ? `¿Pausar ${name}?` : status === "active" ? `¿Activar ${name}?` : `¿Pasar ${name} a periodo gratis?`}
       confirmLabel={status === "paused" ? "Pausar cuenta" : "Confirmar"}
       tone={status === "paused" ? "danger" : "primary"}
       pending={pending}
@@ -343,7 +343,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
         ? "El equipo no podrá entrar al panel, nadie podrá registrarse y los escáneres dejarán de sumar. Los datos se conservan."
         : status === "active"
           ? "A partir de hoy se cobrará por cada sucursal."
-          : "Mientras esté en prueba no se cobra."}
+          : "Mientras esté en periodo gratis no se cobra."}
     </Confirm>
   )
 }
@@ -598,10 +598,10 @@ function MercadoPagoCard({ businessId }: { businessId: string }) {
       )}
 
       {(m.connected || m.events.length > 0) && (
-        <Card title="Últimos cobros leídos" description="Cada cobro aprobado de la cuenta y qué hizo LoyaLoop con él. Sirve para revisar la primera prueba." padded={false}>
+        <Card title="Últimos cobros leídos" description="Cada cobro aprobado de la cuenta y qué hizo LoyaLoop con él. Sirve para revisar los primeros cobros." padded={false}>
           {!m.events.length ? (
             <div style={{ padding: 22 }}>
-              <p className="ll-hint">Todavía no llega ningún cobro. Haz uno de prueba en la terminal y recarga en unos segundos.</p>
+              <p className="ll-hint">Todavía no llega ningún cobro. Haz un cobro en la terminal y recarga en unos segundos.</p>
             </div>
           ) : (
             <ul className="ll-list" style={{ padding: "0 22px 8px" }}>
@@ -710,7 +710,7 @@ function TestsTab({ data }: { data: AdminBundle }) {
   const firstBranch = data.branches[0]
   return (
     <div className="ll-split">
-      <Card title="Simular un cobro de la terminal" description="Hace lo mismo que el aviso de Mercado Pago cuando la caja cobra. Solo existe en esta versión de prueba.">
+      <Card title="Simular un cobro de la terminal" description="Hace lo mismo que el aviso de Mercado Pago cuando la caja cobra. Solo existe en el servidor de pruebas internas.">
         {!connected ? (
           <Notice tone="warning">Conecta un sistema de cobro en la pestaña «Cobro» para simular pagos.</Notice>
         ) : (

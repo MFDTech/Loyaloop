@@ -287,8 +287,8 @@ function LoyaloopNotice() {
             las solicitudes de sus clientes; nosotros le ayudamos.
           </li>
           <li>
-            <b>Activación y pruebas.</b> Una cuenta creada desde la página queda por activar: el negocio puede diseñar su tarjeta, pero los clientes no
-            pueden registrarse hasta que se reciba el primer pago. Si acordamos un periodo de prueba, al terminar sin que se active el pago la tarjeta deja de
+            <b>Activación y periodo gratis.</b> Una cuenta creada desde la página queda por activar: el negocio puede diseñar su tarjeta, pero los clientes no
+            pueden registrarse hasta que se reciba el primer pago. Si acordamos un periodo gratis, al terminar sin que se active el pago la tarjeta deja de
             registrar clientes nuevos y de sumar visitas; el negocio puede activarla después y conserva su configuración.
           </li>
           <li>

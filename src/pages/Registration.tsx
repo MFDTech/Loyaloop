@@ -353,7 +353,7 @@ function DemoVisit({ code, holder, onChange }: { code: string; holder: api.CardH
   const [count, setCount] = useState(0)
   return (
     <div className="ll-demo-box">
-      <b>Prueba cómo se siente</b>
+      <b>Así se siente</b>
       <p>Guarda la tarjeta en tu Wallet y luego toca el botón: es como si la caja escaneara tu tarjeta. En unos segundos te llega el aviso al celular.</p>
       <Button
         loading={visit.pending}

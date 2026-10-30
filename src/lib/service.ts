@@ -504,7 +504,7 @@ export function validateProgram(p: Omit<Program, "businessId">) {
 }
 
 /** Prospect stages as the admin shows them. */
-export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "En prueba", won: "Cliente", lost: "No por ahora" }
+export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "Periodo gratis", won: "Cliente", lost: "No por ahora" }
 
 /** Monthly prices in MXN, as the website shows them. */
 export const PRICES = { starter: 390, pro: 990, extraBranch: 250 } as const
@@ -1462,7 +1462,7 @@ export function createService(store: Store, ctx: Context) {
     if (patch.name !== undefined && !text(patch.name)) throw new ApiError("El nombre no puede quedar vacío.")
     if (patch.status !== undefined && !["active", "trial", "paused"].includes(String(patch.status))) throw new ApiError("Estado no válido.")
     const trialDays = input.trialDays === undefined ? undefined : Math.floor(Number(input.trialDays))
-    if (trialDays !== undefined && !(trialDays >= 1 && trialDays <= 90)) throw new ApiError("La prueba debe durar entre 1 y 90 días.")
+    if (trialDays !== undefined && !(trialDays >= 1 && trialDays <= 90)) throw new ApiError("El periodo gratis debe durar entre 1 y 90 días.")
     if (trialDays !== undefined) {
       patch.status = "trial"
       patch.trialEndsAt = iso(now() + trialDays * DAY)
@@ -1475,7 +1475,7 @@ export function createService(store: Store, ctx: Context) {
       if (price === null) delete business.monthlyPrice
       else if (price !== undefined) business.monthlyPrice = price
       if (business.discreet) business.locationAlerts = false
-      audit(db, a, businessId, trialDays ? `Le dio una prueba de ${trialDays} días` : input.status ? `Cambió el estado a ${input.status}` : price !== undefined ? "Cambió el precio mensual" : "Editó los datos del negocio", price ? `$${price}` : "", now())
+      audit(db, a, businessId, trialDays ? `Le dio ${trialDays} días gratis` : input.status ? `Cambió el estado a ${input.status}` : price !== undefined ? "Cambió el precio mensual" : "Editó los datos del negocio", price ? `$${price}` : "", now())
     })
     if (price !== undefined || patch.plan !== undefined) await pushAmount(businessId)
   }
@@ -1828,7 +1828,7 @@ export function createService(store: Store, ctx: Context) {
     })
     const admins = (await store.read("global")).users.filter((u) => u.role === "admin" && u.active).map((u) => u.email)
     for (const to of admins)
-      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, "Está por activar: se activa solo cuando pague desde su panel, o dale una prueba desde su ficha."], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
+      await sendEmail({ to, subject: `Nuevo negocio en Starter: ${name}`, heading: "Un negocio se dio de alta solo", paragraphs: [`${ownerName} · ${name} (${text(input.sector, 60) || "sin giro"})`, `Correo: ${email}`, "Está por activar: se activa solo cuando pague desde su panel, o dale días gratis desde su ficha."], action: { label: "Ver negocios", url: link("#/admin/negocios") } })
     return (await me())!
   }
 
@@ -2237,7 +2237,7 @@ export function createService(store: Store, ctx: Context) {
       if (!customer) throw new ApiError("No encontramos esta tarjeta de demostración.", "not_found")
       const mine = db.transactions.filter((t) => t.customerId === customer.id && t.kind === "visit")
       if (mine[0] && now() - new Date(mine[0].createdAt).getTime() < 10_000) throw new ApiError("Espera unos segundos para que llegue el aviso del sello anterior.", "rate_limited")
-      if (mine.filter((t) => now() - new Date(t.createdAt).getTime() < DAY).length >= 20) throw new ApiError("Por hoy ya fueron suficientes visitas de prueba.", "rate_limited")
+      if (mine.filter((t) => now() - new Date(t.createdAt).getTime() < DAY).length >= 20) throw new ApiError("Por hoy ya fueron suficientes visitas de demostración.", "rate_limited")
       engine.demoVisit(db, customer, now())
       return { holder: holder(db, customer) }
     })
@@ -2405,7 +2405,7 @@ export function createService(store: Store, ctx: Context) {
     if (business.status === "paused")
       throw new ApiError(`La cuenta de ${business.discreet ? business.neutralName : business.name} está pausada en LoyaLoop, así que no se suman visitas. Para reactivarla, el dueño puede escribir a hola@loyaloop.com.mx.`, "paused")
     if (business.status === "pending") throw new ApiError("Tu tarjeta aún no está activa. Escríbenos a hola@loyaloop.com.mx para activarla.", "paused")
-    if (trialOver(business)) throw new ApiError("Terminó la prueba. Activa tu plan para seguir sumando visitas.", "paused")
+    if (trialOver(business)) throw new ApiError("Terminó el periodo gratis. Activa tu plan para seguir sumando visitas.", "paused")
     return device
   }
 

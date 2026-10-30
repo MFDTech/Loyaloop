@@ -202,7 +202,7 @@ export function BrandEditor({ value, onChange, name, stamps = false, starter = f
           {!validColor ? (
             <p className="ll-field-error">Escribe un color como #8A2E12.</p>
           ) : (
-            contrast < 4.5 && <p className="ll-field-hint">El texto del pase se leerá con poco contraste. Prueba un tono más oscuro o más claro.</p>
+            contrast < 4.5 && <p className="ll-field-hint">El texto del pase se leerá con poco contraste. Elige un tono más oscuro o más claro.</p>
           )}
         </div>
         <div className="ll-field">

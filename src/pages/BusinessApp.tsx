@@ -109,7 +109,7 @@ export default function BusinessApp({ route }: { route: Route }) {
       current={route.path}
       workspace={{
         name: me.business?.name || "Negocio",
-        detail: me.business?.status === "pending" ? "Por activar" : me.business?.status === "trial" ? "Periodo de prueba" : me.business?.status === "paused" ? "Cuenta pausada" : "Panel del negocio",
+        detail: me.business?.status === "pending" ? "Por activar" : me.business?.status === "trial" ? "Periodo gratis" : me.business?.status === "paused" ? "Cuenta pausada" : "Panel del negocio",
         icon: "store",
       }}
     >
@@ -143,7 +143,7 @@ function TrialBanner({ business, owner }: { business?: api.Me["business"]; owner
   const left = Math.ceil((new Date(business.trialEndsAt).getTime() - Date.now()) / DAY)
   return (
     <div style={{ marginBottom: 20 }}>
-      <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Prueba: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu prueba terminó"}>
+      <Notice tone={left > 3 ? "info" : "warning"} title={left > 0 ? `Periodo gratis: te ${left === 1 ? "queda 1 día" : `quedan ${left} días`}` : "Tu periodo gratis terminó"}>
         {left > 0 ? "Para que tu tarjeta siga funcionando cuando termine, consulta cómo pagar tu plan." : "Tu tarjeta dejó de aceptar clientes nuevos. En cuanto recibamos tu pago, vuelve a funcionar."}
         {action}
       </Notice>

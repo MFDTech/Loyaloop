@@ -321,7 +321,7 @@ function TagModal({ branch, discreet, onClose }: { branch: Branch; discreet: boo
         <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: 1.5 }}>
           <li>Instala en tu celular una app para escribir NFC, como NFC Tools.</li>
           <li>Elige escribir un registro de tipo URL y pega el enlace.</li>
-          <li>Acerca la etiqueta y prueba tocándola con otro celular.</li>
+          <li>Acerca la etiqueta y revisa que funcione tocándola con otro celular.</li>
         </ol>
         <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
           <Qr value={link} size={180} label={`Código QR para registrarse en ${branch.name}`} powered={!discreet} />

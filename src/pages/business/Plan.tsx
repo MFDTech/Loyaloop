@@ -22,7 +22,7 @@ const STATUS: Record<
   { label: string; tone: "success" | "warning" | "info" | "neutral" }
 > = {
   active: { label: "Activa", tone: "success" },
-  trial: { label: "En prueba", tone: "info" },
+  trial: { label: "Periodo gratis", tone: "info" },
   pending: { label: "Por activar", tone: "warning" },
   paused: { label: "Pausada", tone: "warning" },
 };

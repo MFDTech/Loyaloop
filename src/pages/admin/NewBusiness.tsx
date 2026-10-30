@@ -214,7 +214,7 @@ export default function NewBusiness({ prospectId }: { prospectId?: string }) {
                   </SelectField>
                   <SelectField label="Estado inicial" value={info.status} onChange={(e) => setInfoField("status", e.target.value)}>
                     <option value="pending">Por activar (espera su pago)</option>
-                    <option value="trial">En prueba (sin cobro)</option>
+                    <option value="trial">Periodo gratis (sin cobro)</option>
                     <option value="active">Activo (ya pagó)</option>
                   </SelectField>
                 </div>
@@ -314,7 +314,7 @@ export default function NewBusiness({ prospectId }: { prospectId?: string }) {
                   </div>
                   <div>
                     <dt>Estado</dt>
-                    <dd>{info.status === "pending" ? "Por activar" : info.status === "trial" ? "En prueba" : "Activo"}</dd>
+                    <dd>{info.status === "pending" ? "Por activar" : info.status === "trial" ? "Periodo gratis" : "Activo"}</dd>
                   </div>
                 </dl>
               </>
