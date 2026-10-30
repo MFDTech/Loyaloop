@@ -4,14 +4,17 @@ import { useAction, useAsync } from "../../lib/hooks"
 import { PREVIEW } from "../../lib/preview"
 import { absoluteLink, href, navigate } from "../../lib/router"
 import type { AuditEntry, BusinessStatus, Provider } from "../../lib/types"
-import { dateTime, formatPhone, int, isEmail, money, roleLabel } from "../../lib/util"
+import { dateTime, formatPhone, int, isEmail, money, relative, roleLabel } from "../../lib/util"
 import { PassPreview, sampleHolder } from "../../components/Pass"
 import { Badge, Button, Card, Confirm, CopyButton, Empty, ErrorState, Field, Icon, Loading, Notice, PageHeader, SelectField, Tabs, useToast } from "../../components/ui"
 import { statusLabel, statusTone } from "./Businesses"
+import { monthlyAmount } from "../../lib/service"
+
+const BILLING_LABEL = { pending: "esperando tarjeta", authorized: "activo", paused: "pausado", cancelled: "cancelado" } as const
 import { SECTORS } from "./NewBusiness"
 import { BrandEditor, NumberField, ProgramEditor, draftCard, type BrandDraft, type ProgramDraft } from "./ProgramEditor"
 
-type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[] }
+type AdminBundle = api.Bundle & { team: api.TeamMember[]; audit: AuditEntry[]; customerCount: number }
 type Tab = "datos" | "tarjeta" | "cobro" | "pruebas" | "bitacora"
 
 export default function BusinessDetail({ id }: { id: string }) {
@@ -69,8 +72,19 @@ export default function BusinessDetail({ id }: { id: string }) {
 
 function DataTab({ data }: { data: AdminBundle }) {
   const business = data.business
-  const [form, setForm] = useState({ name: business.name, sector: business.sector, contactName: business.contactName, email: business.email, phone: business.phone })
+  const [form, setForm] = useState({
+    name: business.name,
+    sector: business.sector,
+    contactName: business.contactName,
+    email: business.email,
+    phone: business.phone,
+    legalName: business.legalName || "",
+    legalAddress: business.legalAddress || "",
+    privacyEmail: business.privacyEmail || "",
+  })
   const [status, setStatus] = useState<BusinessStatus | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [price, setPrice] = useState(business.monthlyPrice ? String(business.monthlyPrice) : "")
   const save = useAction(api.adminUpdateBusiness)
   const toast = useToast()
   const set = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value })
@@ -83,6 +97,7 @@ function DataTab({ data }: { data: AdminBundle }) {
             onSubmit={async (e) => {
               e.preventDefault()
               if (!isEmail(form.email)) return save.setError("El correo de contacto no es válido.")
+              if (form.privacyEmail && !isEmail(form.privacyEmail)) return save.setError("El correo para privacidad no es válido.")
               const r = await save.run(business.id, form)
               if (r.ok) toast("Datos guardados.")
             }}
@@ -100,6 +115,10 @@ function DataTab({ data }: { data: AdminBundle }) {
               <Field label="Correo de contacto" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
               <Field label="Teléfono" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
+            <p className="ll-hint">Para el aviso de privacidad de su tarjeta: el negocio es el responsable de los datos de sus clientes.</p>
+            <Field label="Razón social o nombre del responsable" value={form.legalName} placeholder={business.name} onChange={(e) => set("legalName", e.target.value)} />
+            <Field label="Domicilio" value={form.legalAddress} placeholder="Si lo dejas vacío, se usa la dirección de la sucursal" onChange={(e) => set("legalAddress", e.target.value)} />
+            <Field label="Correo para privacidad" type="email" value={form.privacyEmail} placeholder={business.email} onChange={(e) => set("privacyEmail", e.target.value)} />
             {save.error && <Notice tone="error">{save.error}</Notice>}
             <div className="ll-form-actions">
               <Button type="submit" loading={save.pending}>
@@ -130,21 +149,89 @@ function DataTab({ data }: { data: AdminBundle }) {
         </Card>
       </div>
       <div className="ll-stack">
+        <Card title="Plan">
+          <div className="ll-stack">
+            <p className="ll-hint">
+              {business.plan === "starter"
+                ? "Starter: una sucursal, tarjeta de sellos que el dueño edita solo, sin avisos ni promociones."
+                : "Pro: terminal conectada, todos los tipos de tarjeta y sucursales adicionales ($250 cada una)."}{" "}
+              Cobra <b>{money(monthlyAmount(business, data.branches.length))} al mes</b>
+              {business.monthlyPrice ? " (precio acordado)" : ""}.
+            </p>
+            {business.billing ? (
+              <p className="ll-hint">
+                Pago automático: <b>{BILLING_LABEL[business.billing.status]}</b> · {business.billing.payerEmail}
+                {business.billing.paidUntil ? ` · pagado hasta el ${new Date(business.billing.paidUntil).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                {business.charges?.[0] ? ` · último cobro ${business.charges[0].status === "approved" ? "aprobado" : business.charges[0].status === "rejected" ? "rechazado" : "en proceso"}` : ""}
+              </p>
+            ) : (
+              <p className="ll-hint">Sin pago automático: paga por transferencia o aún no lo activa desde su panel.</p>
+            )}
+            <form
+              className="ll-row"
+              style={{ alignItems: "flex-end" }}
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const value = price.trim() ? Number(price) : null
+                const r = await save.run(business.id, { monthlyPrice: value })
+                if (r.ok) toast(value ? "Precio acordado guardado." : "Vuelve al precio del plan.")
+              }}
+            >
+              <Field label="Precio acordado al mes" type="number" min={0} placeholder="Precio del plan" value={price} onChange={(e) => setPrice(e.target.value)} hint="Vacío: el del plan. Si tiene pago automático, Mercado Pago cobra el nuevo monto desde el siguiente mes." />
+              <Button type="submit" variant="secondary" size="sm" loading={save.pending}>
+                Guardar precio
+              </Button>
+            </form>
+            <div className="ll-row">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={save.pending}
+                onClick={async () => {
+                  const r = await save.run(business.id, { plan: business.plan === "starter" ? "pro" : "starter" })
+                  if (r.ok) toast(business.plan === "starter" ? "Ahora está en Pro." : "Ahora está en Starter.")
+                }}
+              >
+                {business.plan === "starter" ? "Cambiar a Pro" : "Cambiar a Starter"}
+              </Button>
+            </div>
+          </div>
+        </Card>
         <Card title="Estado de la cuenta">
           <div className="ll-stack">
             <p className="ll-hint">
               {business.status === "paused"
                 ? "La cuenta está pausada: el equipo no puede entrar, el registro está cerrado y los escáneres no suman."
-                : business.status === "trial"
-                  ? "En prueba: todo funciona y aún no se cobra."
-                  : "Activa: se cobra por sucursal cada mes."}
+                : business.status === "pending"
+                  ? "Se dio de alta desde la página y espera activación: el dueño ya diseña su tarjeta, pero el registro y la caja están cerrados. Actívala cuando pague o dale días gratis."
+                  : business.status === "trial"
+                    ? business.trialEndsAt
+                      ? `Gratis hasta el ${new Date(business.trialEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}. Después se cierra el registro hasta que la actives.`
+                      : "Periodo gratis: todo funciona y aún no se cobra."
+                    : "Activa: se cobra cada mes."}
             </p>
             <div className="ll-row">
-              {(["active", "trial", "paused"] as BusinessStatus[])
+              {[14, 30].map((days) => (
+                <Button
+                  key={days}
+                  variant="secondary"
+                  size="sm"
+                  disabled={save.pending}
+                  onClick={async () => {
+                    const r = await save.run(business.id, { trialDays: days })
+                    if (r.ok) toast(`${days} días gratis activados.`)
+                  }}
+                >
+                  Dar {days} días gratis
+                </Button>
+              ))}
+            </div>
+            <div className="ll-row">
+              {(["active", "paused"] as BusinessStatus[])
                 .filter((s) => s !== business.status)
                 .map((s) => (
                   <Button key={s} variant={s === "paused" ? "danger" : "secondary"} size="sm" onClick={() => setStatus(s)}>
-                    {s === "active" ? "Activar" : s === "trial" ? "Pasar a prueba" : "Pausar"}
+                    {s === "active" ? "Activar" : s === "trial" ? "Pasar a periodo gratis" : "Pausar"}
                   </Button>
                 ))}
             </div>
@@ -166,11 +253,70 @@ function DataTab({ data }: { data: AdminBundle }) {
             ))}
           </ul>
         </Card>
+        {!business.demo && (
+          <Card title="Eliminar negocio" description="Para negocios dados de alta por error o que ya no trabajan con LoyaLoop. No se puede deshacer.">
+            <div className="ll-stack">
+              <p className="ll-hint">
+                Se borran su tarjeta, sus {int(data.customerCount)} {data.customerCount === 1 ? "cliente" : "clientes"} con todo su historial, sus sucursales, escáneres y equipo. Si solo quieres
+                detenerlo un tiempo, mejor páusalo.
+              </p>
+              <div className="ll-row">
+                <Button variant="danger" size="sm" onClick={() => setDeleting(true)}>
+                  <Icon name="trash" size={16} /> Eliminar negocio
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
       {status && (
         <StatusConfirm businessId={business.id} name={business.name} status={status} onClose={() => setStatus(null)} />
       )}
+      {deleting && <DeleteConfirm data={data} onClose={() => setDeleting(false)} />}
     </div>
+  )
+}
+
+function DeleteConfirm({ data, onClose }: { data: AdminBundle; onClose: () => void }) {
+  const { business, customerCount, branches, devices, team } = data
+  const [typed, setTyped] = useState("")
+  const { run, pending, error } = useAction(api.adminDeleteBusiness)
+  const toast = useToast()
+  const plain = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+  const matches = plain(typed) === plain(business.name)
+  const plural = (n: number, one: string, many: string) => `${int(n)} ${n === 1 ? one : many}`
+  return (
+    <Confirm
+      title={`¿Eliminar ${business.name}?`}
+      confirmLabel="Eliminar para siempre"
+      tone="danger"
+      pending={pending}
+      error={error}
+      disabled={!matches}
+      onClose={onClose}
+      onConfirm={async () => {
+        const r = await run(business.id, typed)
+        if (r.ok) {
+          toast(`Se eliminó ${business.name}.`)
+          navigate("/admin/negocios")
+        }
+      }}
+    >
+      <div className="ll-stack">
+        <p>Esto no se puede deshacer. Se borran:</p>
+        <ul className="ll-bullets">
+          <li>{customerCount ? `${plural(customerCount, "cliente", "clientes")} con sus puntos, sellos, recompensas e historial.` : "Su tarjeta y reglas (aún no tiene clientes)."}</li>
+          <li>
+            {plural(branches.length, "sucursal", "sucursales")}
+            {devices.length ? ` y ${plural(devices.length, "escáner", "escáneres")}, que quedan desvinculados` : ""}.
+          </li>
+          {team.length > 0 && <li>{team.length === 1 ? "1 persona del equipo: ya no podrá entrar." : `${int(team.length)} personas del equipo: ya no podrán entrar.`}</li>}
+          <li>Su tarjeta: en Google Wallet aparece como vencida y en iPhone deja de actualizarse.</li>
+        </ul>
+        {customerCount > 0 && <p className="ll-hint">Si el dueño quiere su lista de clientes, entra a su cuenta y exporta el CSV antes de eliminar.</p>}
+        <Field label={`Escribe «${business.name}» para confirmar`} value={typed} autoComplete="off" data-autofocus onChange={(e) => setTyped(e.target.value)} />
+      </div>
+    </Confirm>
   )
 }
 
@@ -179,7 +325,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
   const toast = useToast()
   return (
     <Confirm
-      title={status === "paused" ? `¿Pausar ${name}?` : status === "active" ? `¿Activar ${name}?` : `¿Pasar ${name} a prueba?`}
+      title={status === "paused" ? `¿Pausar ${name}?` : status === "active" ? `¿Activar ${name}?` : `¿Pasar ${name} a periodo gratis?`}
       confirmLabel={status === "paused" ? "Pausar cuenta" : "Confirmar"}
       tone={status === "paused" ? "danger" : "primary"}
       pending={pending}
@@ -197,7 +343,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
         ? "El equipo no podrá entrar al panel, nadie podrá registrarse y los escáneres dejarán de sumar. Los datos se conservan."
         : status === "active"
           ? "A partir de hoy se cobrará por cada sucursal."
-          : "Mientras esté en prueba no se cobra."}
+          : "Mientras esté en periodo gratis no se cobra."}
     </Confirm>
   )
 }
@@ -205,7 +351,7 @@ function StatusConfirm({ businessId, name, status, onClose }: { businessId: stri
 function CardTab({ data }: { data: AdminBundle }) {
   const { businessId: _ignored, ...current } = data.program
   const [program, setProgram] = useState<ProgramDraft>(current)
-  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts })
+  const [brand, setBrand] = useState<BrandDraft>({ brand: data.business.brand, discreet: data.business.discreet, neutralName: data.business.neutralName, locationAlerts: data.business.locationAlerts, askPhone: !!data.business.askPhone })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const toast = useToast()
@@ -234,7 +380,7 @@ function CardTab({ data }: { data: AdminBundle }) {
           <ProgramEditor value={program} onChange={setProgram} rewards={rewards} />
         </Card>
         <Card title="Marca y privacidad">
-          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} />
+          <BrandEditor value={brand} onChange={setBrand} name={data.business.name} stamps={program.type === "stamps"} />
         </Card>
         <Card title="Recompensas" description="El dueño y el gerente las editan desde su panel.">
           {rewards.length ? (
@@ -271,6 +417,243 @@ const PROVIDERS: { id: Provider; name: string; detail: string }[] = [
 ]
 
 function PaymentsTab({ data }: { data: AdminBundle }) {
+  if (!PREVIEW)
+    return (
+      <div className="ll-stack">
+        <MercadoPagoCard businessId={data.business.id} />
+        <Card title="Clip" description="Para leer los cobros de las terminales Clip, Clip tiene que dar acceso a LoyaLoop como integrador.">
+          <Badge>Próximamente</Badge>
+        </Card>
+      </div>
+    )
+  return <PreviewPayments data={data} />
+}
+
+const EVENT_TONE = { processed: "success", ignored: "neutral", error: "danger", received: "neutral" } as const
+const shortTerminal = (id: string) => id.split("__").pop() || id
+
+function MercadoPagoCard({ businessId }: { businessId: string }) {
+  const mp = useAsync(() => api.adminMercadoPago(businessId), [businessId])
+  const connect = useAction(api.adminConnectMercadoPago)
+  const disconnect = useAction(api.adminDisconnectMercadoPago)
+  const assign = useAction(api.adminAssignTerminal)
+  const [token, setToken] = useState("")
+  const [confirm, setConfirm] = useState(false)
+  const toast = useToast()
+  if (mp.error) return <ErrorState message={mp.error} retry={mp.reload} />
+  if (!mp.data) return <Loading rows={3} />
+  const m = mp.data
+  const assigned = m.registers.filter((r) => r.terminalId).length
+  return (
+    <>
+      <Card
+        title="Mercado Pago Point"
+        description="Cada cobro de la terminal llega solo a LoyaLoop y se junta con el escaneo del cliente en esa caja."
+        actions={
+          m.connected && (
+            <Button variant="secondary" size="sm" onClick={() => setConfirm(true)}>
+              Desconectar
+            </Button>
+          )
+        }
+      >
+        <div className="ll-stack">
+          <div className="ll-row">
+            <Badge tone={m.connected ? (m.lastError ? "danger" : "success") : "neutral"}>{m.connected ? (m.lastError ? "Con error" : "Conectado") : "Sin conectar"}</Badge>
+            {m.connected && (
+              <span className="ll-hint">
+                {m.account} · {m.method === "oauth" ? "autorizado por el dueño" : "con Access Token"}
+                {m.lastSyncAt ? ` · revisado ${relative(m.lastSyncAt)}` : ""}
+              </span>
+            )}
+          </div>
+          {m.problem && <Notice tone="warning">{m.problem}</Notice>}
+          {m.lastError && <p className="ll-field-error">{m.lastError}</p>}
+          {!m.connected && !m.problem && (
+            <>
+              {m.link ? (
+                <div className="ll-stack">
+                  <p>
+                    <b>Opción recomendada:</b> manda este enlace al dueño por WhatsApp. Entra con su cuenta de Mercado Pago, autoriza a LoyaLoop y queda conectado; no tiene que copiar ninguna clave.
+                  </p>
+                  <div className="ll-code-box">
+                    <code>{m.link}</code>
+                    <CopyButton text={m.link} label="Copiar enlace" />
+                  </div>
+                  <p className="ll-hint">El enlace dura 7 días. Cuando el dueño termine, recarga esta página.</p>
+                </div>
+              ) : (
+                <Notice tone="info">El enlace «Conectar con Mercado Pago» se activa cuando el servidor tenga la aplicación de LoyaLoop (MERCADOPAGO_CLIENT_ID y MERCADOPAGO_CLIENT_SECRET). Mientras, pega el Access Token.</Notice>
+              )}
+              <form
+                className="ll-stack"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const r = await connect.run(businessId, token)
+                  if (r.ok) {
+                    setToken("")
+                    toast(`Mercado Pago conectado (${r.value.account}).`)
+                    mp.reload()
+                  }
+                }}
+              >
+                <Field
+                  label={m.link ? "O pega su Access Token" : "Access Token del negocio"}
+                  type="password"
+                  autoComplete="off"
+                  placeholder="APP_USR-…"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  error={connect.error}
+                  hint="En Mercado Pago Developers, Tus integraciones › la aplicación del negocio › Credenciales de producción. Se guarda cifrado."
+                />
+                <div>
+                  <Button type="submit" size="sm" loading={connect.pending} disabled={!token.trim()}>
+                    Conectar
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {m.connected && (
+        <Card
+          title="Terminales"
+          description={
+            m.registers.length === 1
+              ? "Con una sola caja, todos los cobros de esta cuenta van a esa caja. Asignar la terminal es opcional."
+              : "Elige en qué caja está cada terminal: así cada cobro se junta con el escaneo de su caja."
+          }
+          padded={false}
+        >
+          {m.terminalsError ? (
+            <div style={{ padding: 22 }}>
+              <Notice tone="error">{m.terminalsError}</Notice>
+            </div>
+          ) : !m.terminals.length ? (
+            <div style={{ padding: 22 }}>
+              <p className="ll-hint">Esta cuenta no tiene terminales Point registradas. Si la terminal es nueva, vincúlala primero en la app de Mercado Pago.</p>
+            </div>
+          ) : (
+            <div className="ll-table-wrap">
+              <table className="ll-table is-responsive">
+                <thead>
+                  <tr>
+                    <th>Terminal</th>
+                    <th>Modo</th>
+                    <th>Caja de LoyaLoop</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m.terminals.map((t) => (
+                    <tr key={t.id}>
+                      <td className="ll-td-main">
+                        <span className="ll-cell-main">{shortTerminal(t.id)}</span>
+                      </td>
+                      <td data-label="Modo">{t.mode === "PDV" ? "Integrado (PDV)" : t.mode === "STANDALONE" ? "Independiente" : t.mode || "—"}</td>
+                      <td data-label="Caja">
+                        <select
+                          aria-label={`Caja de la terminal ${shortTerminal(t.id)}`}
+                          value={t.registerId || ""}
+                          disabled={assign.pending}
+                          onChange={async (e) => {
+                            const registerId = e.target.value
+                            const previous = t.registerId
+                            const r = registerId ? await assign.run(businessId, registerId, t.id) : previous ? await assign.run(businessId, previous, "") : { ok: true as const, value: undefined }
+                            if (r.ok) {
+                              toast(registerId ? "Terminal asignada." : "Terminal sin caja.")
+                              mp.reload()
+                            }
+                          }}
+                        >
+                          <option value="">Sin asignar</option>
+                          {m.registers.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.branch ? `${r.branch} · ${r.name}` : r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {assign.error && (
+            <div style={{ padding: "0 22px 16px" }}>
+              <p className="ll-field-error">{assign.error}</p>
+            </div>
+          )}
+          {m.registers.length > 1 && m.terminals.length > 0 && assigned < m.registers.length && (
+            <div style={{ padding: "0 22px 16px" }}>
+              <p className="ll-hint">
+                {assigned} de {m.registers.length} cajas tienen terminal.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {(m.connected || m.events.length > 0) && (
+        <Card title="Últimos cobros leídos" description="Cada cobro aprobado de la cuenta y qué hizo LoyaLoop con él. Sirve para revisar los primeros cobros." padded={false}>
+          {!m.events.length ? (
+            <div style={{ padding: 22 }}>
+              <p className="ll-hint">Todavía no llega ningún cobro. Haz un cobro en la terminal y recarga en unos segundos.</p>
+            </div>
+          ) : (
+            <ul className="ll-list" style={{ padding: "0 22px 8px" }}>
+              {m.events.map((e) => (
+                <li key={e.externalId} className="ll-list-item">
+                  <div>
+                    <strong>
+                      {money(e.amount)} · {dateTime(e.at)}
+                    </strong>
+                    <small>
+                      Pago {e.externalId}
+                      {e.detail ? ` · ${e.detail}` : ""}
+                    </small>
+                  </div>
+                  <Badge tone={EVENT_TONE[e.status]}>{e.status === "processed" ? "Leído" : e.status === "ignored" ? "Omitido" : e.status === "error" ? "Error" : "Leyendo"}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div style={{ padding: "0 22px 16px" }}>
+            <Button variant="secondary" size="sm" onClick={mp.reload}>
+              Recargar
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {confirm && (
+        <Confirm
+          title="¿Desconectar Mercado Pago?"
+          confirmLabel="Desconectar"
+          tone="danger"
+          pending={disconnect.pending}
+          error={disconnect.error}
+          onClose={() => setConfirm(false)}
+          onConfirm={async () => {
+            const r = await disconnect.run(businessId)
+            if (r.ok) {
+              toast("Mercado Pago desconectado.")
+              setConfirm(false)
+              mp.reload()
+            }
+          }}
+        >
+          Se borra la clave guardada y LoyaLoop deja de leer los cobros de sus terminales. Los puntos ya sumados se quedan.
+        </Confirm>
+      )}
+    </>
+  )
+}
+
+function PreviewPayments({ data }: { data: AdminBundle }) {
   const { run, pending, error } = useAction(api.adminSetIntegration)
   const [busy, setBusy] = useState<Provider | null>(null)
   const toast = useToast()
@@ -327,7 +710,7 @@ function TestsTab({ data }: { data: AdminBundle }) {
   const firstBranch = data.branches[0]
   return (
     <div className="ll-split">
-      <Card title="Simular un cobro de la terminal" description="Hace lo mismo que el aviso de Mercado Pago cuando la caja cobra. Solo existe en esta versión de prueba.">
+      <Card title="Simular un cobro de la terminal" description="Hace lo mismo que el aviso de Mercado Pago cuando la caja cobra. Solo existe en el servidor de pruebas internas.">
         {!connected ? (
           <Notice tone="warning">Conecta un sistema de cobro en la pestaña «Cobro» para simular pagos.</Notice>
         ) : (

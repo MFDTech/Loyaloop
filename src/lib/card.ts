@@ -1,4 +1,5 @@
 import type { Bundle, PublicCard } from "./api"
+import { planHasNotices } from "./notices"
 import type { Business, Program, Reward } from "./types"
 
 /** The public view of a card, built from the data the panels already have. */
@@ -6,6 +7,8 @@ export function cardFrom(business: Business, program: Program, rewards: Reward[]
   return {
     businessName: business.discreet ? business.neutralName : business.name,
     discreet: business.discreet,
+    promotions: !business.discreet && planHasNotices(business),
+    demo: !!business.demo,
     brand: business.brand,
     type: program.type,
     program: {
@@ -20,6 +23,7 @@ export function cardFrom(business: Business, program: Program, rewards: Reward[]
     },
     rewards: rewards.filter((r) => r.active).map(({ id, name, cost, description }) => ({ id, name, cost, description })),
     contact: { email: business.email, phone: business.phone },
+    askPhone: !!business.askPhone,
   }
 }
 
