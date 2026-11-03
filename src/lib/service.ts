@@ -507,7 +507,7 @@ export function validateProgram(p: Omit<Program, "businessId">) {
 export const STAGE_LABEL: Record<ProspectStage, string> = { to_visit: "Por visitar", visited: "Visitado", demo: "Demo hecha", trial: "Periodo gratis", won: "Cliente", lost: "No por ahora" }
 
 /** Monthly prices in MXN, as the website shows them. */
-export const PRICES = { starter: 390, pro: 990, extraBranch: 250 } as const
+export const PRICES = { starter: 680, pro: 990, extraBranch: 250 } as const
 /** Days a card keeps working after the paid month ends while Mercado Pago retries the charge. */
 export const BILLING_GRACE_DAYS = 7
 /** How often the server re-reads each subscription, in case a notification was lost. */
@@ -1821,8 +1821,8 @@ export function createService(store: Store, ctx: Context) {
       paragraphs: [
         `Creamos la tarjeta de sellos de ${name}. En tu panel puedes ponerle tu logo y colores, elegir la recompensa e imprimir el QR para tu mostrador.`,
         ctx.subscriptions
-          ? "Para activarla, entra a «Plan y pagos» y paga con tarjeta a través de Mercado Pago ($390 al mes en automático). En cuanto se cobre, tus clientes pueden registrarse."
-          : "Para activarla, responde este correo o escríbenos a hola@loyaloop.com.mx y te mandamos los datos para pagar el plan Starter ($390 al mes). En cuanto lo recibamos, tus clientes pueden registrarse.",
+          ? "Para activarla, entra a «Plan y pagos» y paga con tarjeta a través de Mercado Pago ($680 al mes en automático). En cuanto se cobre, tus clientes pueden registrarse."
+          : "Para activarla, responde este correo o escríbenos a hola@loyaloop.com.mx y te mandamos los datos para pagar el plan Starter ($680 al mes). En cuanto lo recibamos, tus clientes pueden registrarse.",
       ],
       action: { label: "Entrar a mi panel", url: link("#/panel") },
     })

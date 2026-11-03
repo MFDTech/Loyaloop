@@ -210,7 +210,7 @@ export default function NewBusiness({ prospectId }: { prospectId?: string }) {
                     }}
                   >
                     <option value="pro">Pro ($990 al mes)</option>
-                    <option value="starter">Starter ($390 al mes)</option>
+                    <option value="starter">Starter ($680 al mes)</option>
                   </SelectField>
                   <SelectField label="Estado inicial" value={info.status} onChange={(e) => setInfoField("status", e.target.value)}>
                     <option value="pending">Por activar (espera su pago)</option>

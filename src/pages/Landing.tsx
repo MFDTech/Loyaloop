@@ -574,7 +574,7 @@ export default function Landing() {
               <h3>Starter</h3>
               <p className="ll-plan-for">Para empezar hoy y configurarla tú mismo.</p>
               <div className="ll-plan-price">
-                <strong>$390</strong>
+                <strong>$680</strong>
                 <span>MXN al mes</span>
               </div>
               <ul>

@@ -6,7 +6,7 @@ type PlanId = "starter" | "pro" | "proGestion"
 
 /** Plan prices (MXN per month for one branch), as the landing shows them. */
 export const PLANS: Record<PlanId, { name: string; price: number; pitch: string }> = {
-  starter: { name: "Starter", price: 390, pitch: "Un sello por visita. La configuras tú en minutos." },
+  starter: { name: "Starter", price: 680, pitch: "Un sello por visita. La configuras tú en minutos." },
   pro: { name: "Pro", price: 990, pitch: "Te la dejamos lista: puntos que se suman solos desde tu terminal, niveles y recompensas." },
   proGestion: { name: "Pro + gestión", price: 1980, pitch: "Modo discreto, terminal conectada y nosotros llevamos tus promociones." },
 }

@@ -125,7 +125,7 @@ Las invitaciones, el alta de un negocio y el cambio de contraseña se envían co
 
 Los negocios pagan su plan con tarjeta desde **Plan y pagos** en su panel (`src/pages/business/Plan.tsx`). LoyaLoop crea una suscripción de Mercado Pago (`/preapproval`) en **la cuenta de Mercado Pago de LoyaLoop** y manda al dueño a la página de Mercado Pago a poner su tarjeta. Mercado Pago cobra ese día y después cada mes; el dinero llega a la cuenta de LoyaLoop.
 
-- Monto: Starter $390, Pro $990, +$250 por sucursal adicional, o el precio acordado que pongas en la ficha del negocio (admin). Si cambia, se actualiza en Mercado Pago para el siguiente cobro.
+- Monto: Starter $680, Pro $990, +$250 por sucursal adicional, o el precio acordado que pongas en la ficha del negocio (admin). Si cambia, se actualiza en Mercado Pago para el siguiente cobro.
 - El primer cobro activa la tarjeta (estado «Por activar» o «En prueba» → «Activo»).
 - Si un cobro falla, Mercado Pago reintenta y al dueño le llega un correo. 7 días después de terminar el mes pagado, la tarjeta vuelve a «Por activar» hasta que pague.
 - El dueño cancela desde su panel; la tarjeta funciona hasta que termina el mes pagado.
