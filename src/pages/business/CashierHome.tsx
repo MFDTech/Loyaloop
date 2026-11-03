@@ -7,6 +7,10 @@ import { Button, Card, ErrorState, Icon, Loading, Notice, PageHeader } from "../
 export default function CashierHome({ me }: { me: api.Me }) {
   const b = useAsync(api.bundle)
   const kiosk = useAsync(() => (api.deviceToken() ? api.kiosk() : Promise.resolve(null)))
+  const [changing, setChanging] = useState(false)
+  // A device paired to another business is not this cashier's scanner.
+  const ownKiosk = kiosk.data && kiosk.data.businessId === me.business?.id ? kiosk.data : null
+  const otherBusiness = !!kiosk.data && !ownKiosk
   const [registerId, setRegisterId] = useState("")
   const pair = useAction(async (id: string) => {
     const { code } = await api.createPairingCode(id)
@@ -20,16 +24,24 @@ export default function CashierHome({ me }: { me: api.Me }) {
   return (
     <>
       <PageHeader title={`Hola, ${me.user.name.split(" ")[0]}`} description="Desde aquí abres el escáner de tu caja." />
-      {kiosk.data ? (
-        <Card title="Este dispositivo ya es un escáner" description={`${kiosk.data.registerName} · ${kiosk.data.branchName}`}>
-          <Button size="lg" onClick={() => navigate("/caja")}>
-            <Icon name="scan" size={20} /> Abrir escáner
-          </Button>
+      {ownKiosk && !changing ? (
+        <Card title="Este dispositivo ya es un escáner" description={`${ownKiosk.registerName} · ${ownKiosk.branchName}`}>
+          <div className="ll-row" style={{ gap: 10, flexWrap: "wrap" }}>
+            <Button size="lg" onClick={() => navigate("/caja")}>
+              <Icon name="scan" size={20} /> Abrir escáner
+            </Button>
+            {registers.length > 1 && (
+              <Button size="lg" variant="secondary" onClick={() => setChanging(true)}>
+                Cambiar de caja
+              </Button>
+            )}
+          </div>
         </Card>
       ) : (
-        <Card title="Usar este dispositivo como escáner" description="Elige tu caja. El dispositivo quedará vinculado hasta que un gerente lo desvincule.">
+        <Card title={changing ? "Cambiar de caja" : "Usar este dispositivo como escáner"} description="Elige tu caja. El dispositivo quedará vinculado hasta que un gerente lo desvincule.">
           <div className="ll-stack">
             {kiosk.error && <Notice tone="warning">{kiosk.error}</Notice>}
+            {otherBusiness && <Notice tone="warning">Este dispositivo era el escáner de otro negocio. Al vincularlo a tu caja deja de funcionar para ese negocio.</Notice>}
             <div className="ll-list">
               {registers.map((r) => (
                 <label key={r.id} className="ll-check" style={{ padding: "10px 0" }}>

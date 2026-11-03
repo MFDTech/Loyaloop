@@ -377,7 +377,7 @@ export function Modal({ title, description, children, onClose, size = "md", foot
   )
 }
 
-export function Confirm({ title, children, confirmLabel, tone = "primary", onConfirm, onClose, pending, error }: { title: string; children: ReactNode; confirmLabel: string; tone?: "primary" | "danger"; onConfirm: () => void; onClose: () => void; pending?: boolean; error?: string }) {
+export function Confirm({ title, children, confirmLabel, tone = "primary", onConfirm, onClose, pending, error, disabled = false }: { title: string; children: ReactNode; confirmLabel: string; tone?: "primary" | "danger"; onConfirm: () => void; onClose: () => void; pending?: boolean; error?: string; disabled?: boolean }) {
   return (
     <Modal
       title={title}
@@ -388,7 +388,7 @@ export function Confirm({ title, children, confirmLabel, tone = "primary", onCon
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm} loading={pending} data-autofocus>
+          <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm} loading={pending} disabled={disabled} data-autofocus>
             {confirmLabel}
           </Button>
         </>

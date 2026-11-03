@@ -1,0 +1,104 @@
+# Production on the Hostinger VPS: docker compose up -d --build
+# Settings come from .env (copy .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: loyaloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: loyaloop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loyaloop -d loyaloop"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_PREVIEW: ${VITE_PREVIEW:-false}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://loyaloop:${POSTGRES_PASSWORD}@db:5432/loyaloop
+      PORT: "3000"
+      TRUST_PROXY: "true"
+    volumes:
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # HTTPS with automatic Let's Encrypt certificates.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Falta DOMAIN en .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  # Daily database backup in ./backups, the last 14 kept.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          pg_dump -h db -U loyaloop -d loyaloop -Fc -f /backups/loyaloop-$$(date +%Y%m%d-%H%M).dump && echo "respaldo listo"
+          ls -1t /backups/*.dump | tail -n +15 | xargs -r rm --
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Copies each backup to Cloudflare R2 (outside the VPS) and keeps 30 days there.
+  # Without R2_* in .env it only waits. See docs/backend.md → Respaldos fuera del servidor.
+  offsite:
+    image: rclone/rclone:1.68
+    restart: unless-stopped
+    environment:
+      R2_BUCKET: ${R2_BUCKET:-}
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_R2_ENDPOINT: https://${R2_ACCOUNT_ID:-sin-configurar}.r2.cloudflarestorage.com
+      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"
+    volumes:
+      - ./backups:/backups:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$R2_BUCKET" ] || [ -z "$$RCLONE_CONFIG_R2_ACCESS_KEY_ID" ]; then
+          echo "R2 sin configurar: los respaldos solo quedan en el VPS"; exec sleep infinity
+        fi
+        while true; do
+          # Only finished files (older than 10 minutes); files already in R2 are skipped.
+          rclone copy /backups "r2:$$R2_BUCKET/loyaloop" --include "*.dump" --min-age 10m --stats-one-line -v \
+            && rclone delete "r2:$$R2_BUCKET/loyaloop" --min-age 30d \
+            && echo "respaldos copiados a R2"
+          sleep 3600
+        done
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

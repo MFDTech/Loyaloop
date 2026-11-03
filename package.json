@@ -9,26 +9,40 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server",
+    "server:dev": "tsx watch server/src/index.ts",
+    "server:build": "esbuild server/src/index.ts server/src/cli.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outdir=server/dist",
+    "start": "node server/dist/index.js"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
     "jsqr": "^1.4.0",
+    "jszip": "^3.10.2",
+    "node-forge": "^1.4.0",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.0.0",
+    "@types/node-forge": "^1.3.14",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
-    "jsdom": "^30.1.2",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.3",
     "oxfmt": "^0.2.0",
-    "tailwindcss": "^4.0.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
-    "vite": "^8.0.5",
+    "vite": "^8.3.5",
     "vitest": "^5.0.4"
-  }
+  },
+  "packageManager": "pnpm@10.28.0"
 }
